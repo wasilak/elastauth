@@ -1,0 +1,4 @@
+default_role: your_default_kibana_role
+group_mappings:
+  your_ad_group:
+    - your_kibana_role

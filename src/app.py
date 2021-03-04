@@ -1,7 +1,7 @@
 import logging
 import os
 from flask import Flask, jsonify, request, Response
-from models.elasticsearch import Elasticsearch
+from models.elasticsearch import Elasticsearch, UserCreationState
 from dotenv import load_dotenv
 import yaml
 import secrets
@@ -17,6 +17,12 @@ PASSWORD_LENGTH = 13
 BLOCK_SIZE = 16
 ELASTICSEARCH_OBJECT = None
 CACHE_OBJECT = None
+
+
+class AppException(Exception):
+    """Custom exception class for handling internal errors."""
+
+    pass
 
 
 def get_cache():
@@ -83,65 +89,69 @@ def health():
 @app.route('/')
 def check_user():
 
-    if not request.headers.get("Remote-User"):
-        return {
-            "name": "Kibana Auth Proxy",
-            "info": "Please provide required headers",
-        }
-
-    cache = get_cache()
-
-    cache_key = "test-kibana-proxy-auth-{}".format(request.headers.get("Remote-User"))
-
-    print(cache.exists(cache_key))
-
-    if not cache.exists(cache_key):
-        password = os.getenv("KIBANA_USER_PASSWORD", secrets.token_urlsafe(PASSWORD_LENGTH))
-
-        try:
-            elastic = get_elasticsearch(app)
-        except Exception as e:
+    try:
+        if not request.headers.get("Remote-User"):
             return {
-                "error": str(e),
-            }, 500
+                "name": "Kibana Auth Proxy",
+                "info": "Please provide required headers",
+            }
 
-        # elastic.check_user(request.headers.get("Remote-User"))
+        cache = get_cache()
 
-        user_groups = request.headers.get("Remote-Groups").split(",")
+        cache_key = "test-kibana-proxy-auth-{}".format(request.headers.get("Remote-User"))
 
-        roles = [
-            app.config['config']['default_role']
-        ]
-        if app.config['config']['group_mappings']:
-            roles = []
+        print(cache.exists(cache_key))
 
-            for group in user_groups:
-                if group in app.config['config']['group_mappings']:
-                    for mapping in app.config['config']['group_mappings'][group]:
-                        roles.append(mapping)
+        if not cache.exists(cache_key):
+            password = os.getenv("KIBANA_USER_PASSWORD", secrets.token_urlsafe(PASSWORD_LENGTH))
 
-        elastic.update_user(
-            request.headers.get("Remote-User"),
-            password,
-            request.headers.get("Remote-Email"),
-            request.headers.get("Remote-Name"),
-            {
-                "groups": user_groups
-            },
-            roles,
-        )
+            try:
+                elastic = get_elasticsearch(app)
+            except Exception as es_exc:
+                raise AppException('Error whilst connecting to elasticsearch: {1}'.format(str(es_exc)))
 
-        encrypted_password = encrypt(bytes(password, encoding='utf-8'), bytes(app.config['SECRET_KEY'], encoding='utf-8'))
-        cache.set(cache_key, encrypted_password)
-        app.logger.debug("Password generated for {}".format(request.headers.get("Remote-User")))
+            # elastic.check_user(request.headers.get("Remote-User"))
 
-    resp = Response()
+            user_groups = request.headers.get("Remote-Groups").split(",")
 
-    decrypted_pass = decrypt(cache.get(cache_key), bytes(app.config['SECRET_KEY'], encoding='utf-8')).decode("utf-8")
-    user_and_pass_string = "{}:{}".format(request.headers.get("Remote-User"), decrypted_pass)
-    user_and_pass = base64.b64encode(bytes(user_and_pass_string, encoding='utf-8')).decode("ascii")
+            roles = [
+                app.config['config']['default_role']
+            ]
+            if app.config['config']['group_mappings']:
+                roles = []
 
-    resp.headers = dict(request.headers)
-    resp.headers['Authorization'] = "Basic {}".format(user_and_pass)
+                for group in user_groups:
+                    if group in app.config['config']['group_mappings']:
+                        for mapping in app.config['config']['group_mappings'][group]:
+                            roles.append(mapping)
 
-    return resp
+            user_creation_state = elastic.update_user(
+                request.headers.get("Remote-User"),
+                password,
+                request.headers.get("Remote-Email"),
+                request.headers.get("Remote-Name"),
+                {
+                    "groups": user_groups
+                },
+                roles,
+            )
+            if user_creation_state is UserCreationState.ERROR:
+                raise AppException('Erorr whilst creating/updating user')
+
+            encrypted_password = encrypt(bytes(password, encoding='utf-8'), bytes(app.config['SECRET_KEY'], encoding='utf-8'))
+            cache.set(cache_key, encrypted_password)
+            app.logger.debug("Password generated for {}".format(request.headers.get("Remote-User")))
+
+        resp = Response()
+
+        decrypted_pass = decrypt(cache.get(cache_key), bytes(app.config['SECRET_KEY'], encoding='utf-8')).decode("utf-8")
+        user_and_pass_string = "{}:{}".format(request.headers.get("Remote-User"), decrypted_pass)
+        user_and_pass = base64.b64encode(bytes(user_and_pass_string, encoding='utf-8')).decode("ascii")
+
+        resp.headers = dict(request.headers)
+        resp.headers['Authorization'] = "Basic {}".format(user_and_pass)
+
+        return resp
+
+    except AppException as app_exc:
+        return {"error": str(app_exc)}, 500

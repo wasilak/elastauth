@@ -73,9 +73,10 @@ def decrypt(encrypted, passphrase):
 
 def get_user_attribute(attribute):
     """Check if Remote user attribute header exists and return value."""
-    val = request.headers.get('Remote-' + attribute)
+    header_name = 'Remote-' + attribute
+    val = request.headers.get(header_name)
     if not val:
-        raise AppException('Attribute not provided: ' + attribute)
+        raise AppException('Header not provided: ' + header_name)
     return val
 
 

@@ -1,0 +1,23 @@
+version: '3.3'
+
+services:
+  kibana-auth-proxy:
+    build: .
+    env_file: ./src/.env
+    expose:
+      - 5000
+    ports:
+      - "5000:5000"
+    depends_on:
+      - redis
+    volumes:
+      - "./src/config.yml:/app/config.yml"
+
+  redis:
+    image: redis:alpine
+    container_name: redis
+    volumes:
+      - ./redis:/data
+    expose:
+      - 6379
+    restart: unless-stopped

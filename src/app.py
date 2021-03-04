@@ -103,7 +103,7 @@ def check_user():
                     for mapping in app.config['config']['group_mappings'][group]:
                         roles.append(mapping)
 
-        user_created, user_updated = elastic.update_user(
+        elastic.update_user(
             request.headers.get("Remote-User"),
             password,
             request.headers.get("Remote-Email"),

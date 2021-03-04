@@ -1,3 +1,4 @@
+
 import requests
 import json
 
@@ -43,10 +44,8 @@ class Elasticsearch(dict):
 
         self.logger.debug(r.text)
 
-        if r.status_code == 200:
-            response = r.json()
-            if response["created"]:
-                return True, False
-            return False, True
+        if r.status_code != 200:
+            raise Exception('Error whilst creating/updating user')
 
-        return False, False
+        response = r.json()
+        return True if 'created' in response and response['created'] else False

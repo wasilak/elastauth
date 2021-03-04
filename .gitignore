@@ -216,3 +216,6 @@ GitHub.sublime-settings
 
 # End of https://www.toptal.com/developers/gitignore/api/python,macos,sublimetext,visualstudiocode
 src/config.yml
+
+# Redis data directory used in docker-compose
+redis

@@ -1,7 +1,7 @@
 import redis
 
 
-class Cache():
+class Cache(object):
 
     def __init__(self, host, port, db, expire):
         self.redis = redis.Redis(

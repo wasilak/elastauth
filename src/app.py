@@ -95,7 +95,7 @@ def check_user():
         roles = [
             app.config['config']['default_role']
         ]
-        if len(app.config['config']['group_mappings']) > 0:
+        if app.config['config']['group_mappings']:
             roles = []
 
             for group in user_groups:

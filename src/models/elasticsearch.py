@@ -1,6 +1,13 @@
 
+from enum import Enum
 import requests
 import json
+
+
+class UserCreationState(Enum):
+    CREATED = 'CREATED'
+    UPDATED = 'UPDATED'
+    ERROR = 'ERROR'
 
 
 class Elasticsearch(dict):
@@ -42,7 +49,7 @@ class Elasticsearch(dict):
         self.logger.debug(r.text)
 
         if r.status_code != 200:
-            raise Exception('Error whilst creating/updating user')
+            raise UserCreationState.ERROR
 
         response = r.json()
-        return 'created' in response and response['created']
+        return UserCreationState.CREATED if 'created' in response and response['created'] else UserCreationState.UPDATED

@@ -1,5 +1,13 @@
+
+from enum import Enum
 import requests
 import json
+
+
+class UserCreationState(Enum):
+    CREATED = 1
+    UPDATED = 2
+    ERROR = 3
 
 
 class Elasticsearch(dict):
@@ -23,10 +31,7 @@ class Elasticsearch(dict):
     def check_user(self, username) -> bool:
         r = requests.get("{}/{}/{}".format(self.address, "_security/user", username), auth=self.auth, verify=self.verify_ssl, headers=self.headers)
 
-        if r.status_code == 404:
-            return False
-
-        return True
+        return r.status_code != 404
 
     def update_user(self, username, password, email, full_name, metadata, roles):
 
@@ -43,10 +48,8 @@ class Elasticsearch(dict):
 
         self.logger.debug(r.text)
 
-        if r.status_code == 200:
-            response = r.json()
-            if response["created"]:
-                return True, False
-            return False, True
+        if r.status_code != 200:
+            raise UserCreationState.ERROR
 
-        return False, False
+        response = r.json()
+        return UserCreationState.CREATED if 'created' in response and response['created'] else UserCreationState.UPDATED

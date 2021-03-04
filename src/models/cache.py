@@ -1,7 +1,7 @@
 import redis
 
 
-class Cache():
+class Cache(object):
 
     def __init__(self, host, port, db, expire):
         self.redis = redis.Redis(
@@ -12,7 +12,7 @@ class Cache():
         self.expire = expire
 
     def exists(self, key):
-        return True if self.redis.exists(key) > 0 else False
+        return self.redis.exists(key) > 0
 
     def get(self, key):
         return self.redis.get(key).decode("utf-8")

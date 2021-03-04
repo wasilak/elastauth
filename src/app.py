@@ -15,6 +15,30 @@ load_dotenv()
 
 PASSWORD_LENGTH = 13
 BLOCK_SIZE = 16
+ELASTICSEARCH_OBJECT = None
+REDIS_OBJECT = None
+
+def get_redis_connection():
+    """Create/return singleton connection to redis."""
+    if REDIS_OBJECT is None:
+        REDIS_OBJECT = Cache(
+            os.getenv("REDIS_HOST", 'localhost'),
+            os.getenv("REDIS_PORT", 6379),
+            os.getenv("REDIS_DB", 0),
+            os.getenv("REDIS_EXPIRE_SECONDS", 3600),
+        )
+    return REDIS_OBJECT
+
+def get_elasticsearch(app_obj):
+    """Create/return singleton connection to elasticsearch."""
+    if ELASTICSEARCH_OBJECT is None:
+
+        auth = (os.getenv("ELASTICSEARCH_USER", ''), os.getenv("ELASTICSEARCH_PASSWORD", ''))
+
+        verify_ssl = False if os.getenv("VERIFY_SSL", '1') == "0" else True
+
+        ELASTICSEARCH_OBJECT = Elasticsearch(os.getenv("ELASTICSEARCH_HOST", ''), verify_ssl, app_obj.logger, auth)
+    return ELASTICSEARCH_OBJECT
 
 
 def trans(key):
@@ -63,12 +87,7 @@ def check_user():
             "info": "Please provide required headers",
         }
 
-    cache = Cache(
-        os.getenv("REDIS_HOST", 'localhost'),
-        os.getenv("REDIS_PORT", 6379),
-        os.getenv("REDIS_DB", 0),
-        os.getenv("REDIS_EXPIRE_SECONDS", 3600),
-    )
+    cache = get_redis_connection()
 
     cache_key = "test-kibana-proxy-auth-{}".format(request.headers.get("Remote-User"))
 
@@ -77,12 +96,8 @@ def check_user():
     if not cache.exists(cache_key):
         password = os.getenv("KIBANA_USER_PASSWORD", secrets.token_urlsafe(PASSWORD_LENGTH))
 
-        auth = (os.getenv("ELASTICSEARCH_USER", ''), os.getenv("ELASTICSEARCH_PASSWORD", ''))
-
-        verify_ssl = False if os.getenv("VERIFY_SSL", '1') == "0" else True
-
         try:
-            elastic = Elasticsearch(os.getenv("ELASTICSEARCH_HOST", ''), verify_ssl, app.logger, auth)
+            elastic = get_elasticsearch(app)
         except Exception as e:
             return {
                 "error": str(e),

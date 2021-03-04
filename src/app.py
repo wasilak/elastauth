@@ -40,7 +40,6 @@ class Factory(object):
             )
         return Factory.CACHE_OBJECT
 
-
     def get_elasticsearch(app_obj):
         """Create/return singleton connection to elasticsearch."""
         if Factory.ELASTICSEARCH_OBJECT is None:
@@ -70,6 +69,7 @@ def decrypt(encrypted, passphrase):
     IV = encrypted[:BLOCK_SIZE]
     aes = AES.new(passphrase, AES.MODE_CFB, IV)
     return aes.decrypt(encrypted[BLOCK_SIZE:])
+
 
 def get_user_attribute(attribute):
     """Check if Remote user attribute header exists and return value."""
@@ -119,7 +119,7 @@ def check_user():
             try:
                 elastic = Factory.get_elasticsearch(app)
             except Exception as es_exc:
-                raise AppException('Error whilst connecting to elasticsearch: {1}'.format(str(es_exc)))
+                raise AppException('Error whilst connecting to elasticsearch: {}'.format(str(es_exc)))
 
             # elastic.check_user(request.headers.get("Remote-User"))
 

@@ -18,6 +18,7 @@ BLOCK_SIZE = 16
 ELASTICSEARCH_OBJECT = None
 CACHE_OBJECT = None
 
+
 def get_cache():
     """Create/return singleton connection to redis."""
     if CACHE_OBJECT is None:
@@ -28,6 +29,7 @@ def get_cache():
             os.getenv("REDIS_EXPIRE_SECONDS", 3600),
         )
     return CACHE_OBJECT
+
 
 def get_elasticsearch(app_obj):
     """Create/return singleton connection to elasticsearch."""

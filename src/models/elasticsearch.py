@@ -24,10 +24,7 @@ class Elasticsearch(dict):
     def check_user(self, username) -> bool:
         r = requests.get("{}/{}/{}".format(self.address, "_security/user", username), auth=self.auth, verify=self.verify_ssl, headers=self.headers)
 
-        if r.status_code == 404:
-            return False
-
-        return True
+        return r.status_code != 404
 
     def update_user(self, username, password, email, full_name, metadata, roles):
 
@@ -48,4 +45,4 @@ class Elasticsearch(dict):
             raise Exception('Error whilst creating/updating user')
 
         response = r.json()
-        return True if 'created' in response and response['created'] else False
+        return 'created' in response and response['created']

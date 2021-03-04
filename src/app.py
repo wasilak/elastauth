@@ -67,6 +67,13 @@ def decrypt(encrypted, passphrase):
     aes = AES.new(passphrase, AES.MODE_CFB, IV)
     return aes.decrypt(encrypted[BLOCK_SIZE:])
 
+def get_user_attribute(attribute):
+    """Check if Remote user attribute header exists and return value."""
+    val = request.headers.get('Remote-' + attribute)
+    if not val:
+        raise AppException('Attribute not provided: ' + attribute)
+    return val
+
 
 app = Flask(__name__)
 app.logger.setLevel(logging.DEBUG)
@@ -88,9 +95,9 @@ def health():
 
 @app.route('/')
 def check_user():
-
     try:
-        if not request.headers.get("Remote-User"):
+        user = get_user_attribute('User')
+        if not user:
             return {
                 "name": "Kibana Auth Proxy",
                 "info": "Please provide required headers",
@@ -98,7 +105,7 @@ def check_user():
 
         cache = get_cache()
 
-        cache_key = "test-kibana-proxy-auth-{}".format(request.headers.get("Remote-User"))
+        cache_key = "test-kibana-proxy-auth-{}".format(user)
 
         print(cache.exists(cache_key))
 
@@ -126,10 +133,10 @@ def check_user():
                             roles.append(mapping)
 
             user_creation_state = elastic.update_user(
-                request.headers.get("Remote-User"),
+                user,
                 password,
-                request.headers.get("Remote-Email"),
-                request.headers.get("Remote-Name"),
+                get_user_attribute('Email'),
+                get_user_attribute('Name'),
                 {
                     "groups": user_groups
                 },
@@ -140,12 +147,12 @@ def check_user():
 
             encrypted_password = encrypt(bytes(password, encoding='utf-8'), bytes(app.config['SECRET_KEY'], encoding='utf-8'))
             cache.set(cache_key, encrypted_password)
-            app.logger.debug("Password generated for {}".format(request.headers.get("Remote-User")))
+            app.logger.debug("Password generated for {}".format(user))
 
         resp = Response()
 
         decrypted_pass = decrypt(cache.get(cache_key), bytes(app.config['SECRET_KEY'], encoding='utf-8')).decode("utf-8")
-        user_and_pass_string = "{}:{}".format(request.headers.get("Remote-User"), decrypted_pass)
+        user_and_pass_string = "{}:{}".format(user, decrypted_pass)
         user_and_pass = base64.b64encode(bytes(user_and_pass_string, encoding='utf-8')).decode("ascii")
 
         resp.headers = dict(request.headers)

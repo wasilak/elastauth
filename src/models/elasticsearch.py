@@ -5,9 +5,9 @@ import json
 
 
 class UserCreationState(Enum):
-    CREATED = 'CREATED'
-    UPDATED = 'UPDATED'
-    ERROR = 'ERROR'
+    CREATED = 1
+    UPDATED = 2
+    ERROR = 3
 
 
 class Elasticsearch(dict):

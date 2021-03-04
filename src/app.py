@@ -15,8 +15,6 @@ load_dotenv()
 
 PASSWORD_LENGTH = 13
 BLOCK_SIZE = 16
-ELASTICSEARCH_OBJECT = None
-CACHE_OBJECT = None
 
 
 class AppException(Exception):
@@ -25,28 +23,34 @@ class AppException(Exception):
     pass
 
 
-def get_cache():
-    """Create/return singleton connection to redis."""
-    if CACHE_OBJECT is None:
-        CACHE_OBJECT = Cache(
-            os.getenv("REDIS_HOST", 'localhost'),
-            os.getenv("REDIS_PORT", 6379),
-            os.getenv("REDIS_DB", 0),
-            os.getenv("REDIS_EXPIRE_SECONDS", 3600),
-        )
-    return CACHE_OBJECT
+class Factory(object):
+    """Factory for creating and storing singletons."""
+
+    ELASTICSEARCH_OBJECT = None
+    CACHE_OBJECT = None
+
+    def get_cache():
+        """Create/return singleton connection to redis."""
+        if Factory.CACHE_OBJECT is None:
+            Factory.CACHE_OBJECT = Cache(
+                os.getenv("REDIS_HOST", 'localhost'),
+                os.getenv("REDIS_PORT", 6379),
+                os.getenv("REDIS_DB", 0),
+                os.getenv("REDIS_EXPIRE_SECONDS", 3600),
+            )
+        return Factory.CACHE_OBJECT
 
 
-def get_elasticsearch(app_obj):
-    """Create/return singleton connection to elasticsearch."""
-    if ELASTICSEARCH_OBJECT is None:
+    def get_elasticsearch(app_obj):
+        """Create/return singleton connection to elasticsearch."""
+        if Factory.ELASTICSEARCH_OBJECT is None:
 
-        auth = (os.getenv("ELASTICSEARCH_USER", ''), os.getenv("ELASTICSEARCH_PASSWORD", ''))
+            auth = (os.getenv("ELASTICSEARCH_USER", ''), os.getenv("ELASTICSEARCH_PASSWORD", ''))
 
-        verify_ssl = False if os.getenv("VERIFY_SSL", '1') == "0" else True
+            verify_ssl = False if os.getenv("VERIFY_SSL", '1') == "0" else True
 
-        ELASTICSEARCH_OBJECT = Elasticsearch(os.getenv("ELASTICSEARCH_HOST", ''), verify_ssl, app_obj.logger, auth)
-    return ELASTICSEARCH_OBJECT
+            Factory.ELASTICSEARCH_OBJECT = Elasticsearch(os.getenv("ELASTICSEARCH_HOST", ''), verify_ssl, app_obj.logger, auth)
+        return Factory.ELASTICSEARCH_OBJECT
 
 
 def trans(key):
@@ -103,7 +107,7 @@ def check_user():
                 "info": "Please provide required headers",
             }
 
-        cache = get_cache()
+        cache = Factory.get_cache()
 
         cache_key = "test-kibana-proxy-auth-{}".format(user)
 
@@ -113,7 +117,7 @@ def check_user():
             password = os.getenv("KIBANA_USER_PASSWORD", secrets.token_urlsafe(PASSWORD_LENGTH))
 
             try:
-                elastic = get_elasticsearch(app)
+                elastic = Factory.get_elasticsearch(app)
             except Exception as es_exc:
                 raise AppException('Error whilst connecting to elasticsearch: {1}'.format(str(es_exc)))
 

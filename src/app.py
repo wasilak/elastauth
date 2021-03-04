@@ -111,8 +111,6 @@ def check_user():
 
         cache_key = "test-kibana-proxy-auth-{}".format(user)
 
-        print(cache.exists(cache_key))
-
         if not cache.exists(cache_key):
             password = os.getenv("KIBANA_USER_PASSWORD", secrets.token_urlsafe(PASSWORD_LENGTH))
 

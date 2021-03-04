@@ -13,8 +13,7 @@ from hashlib import md5
 
 load_dotenv()
 
-password_length = 13
-
+PASSWORD_LENGTH = 13
 BLOCK_SIZE = 16
 
 
@@ -76,7 +75,7 @@ def check_user():
     print(cache.exists(cache_key))
 
     if not cache.exists(cache_key):
-        password = os.getenv("KIBANA_USER_PASSWORD", secrets.token_urlsafe(password_length))
+        password = os.getenv("KIBANA_USER_PASSWORD", secrets.token_urlsafe(PASSWORD_LENGTH))
 
         auth = (os.getenv("ELASTICSEARCH_USER", ''), os.getenv("ELASTICSEARCH_PASSWORD", ''))
 

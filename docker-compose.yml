@@ -11,7 +11,7 @@ services:
     depends_on:
       - redis
     volumes:
-      - "./src/config.yml:/app/config.yml"
+      - "./config.yml:/app/config.yml"
 
   redis:
     image: redis:alpine

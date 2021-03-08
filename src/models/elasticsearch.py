@@ -10,7 +10,7 @@ class UserCreationState(Enum):
     ERROR = 3
 
 
-class Elasticsearch(dict):
+class Elasticsearch():
 
     def __init__(self, address, verify_ssl, logger, auth=('user', 'pass')):
         self.address = address
@@ -20,8 +20,6 @@ class Elasticsearch(dict):
             "Content-Type": "application/json"
         }
         self.verify_ssl = verify_ssl
-
-        dict.__init__(self, address=address)
 
         r = requests.get("{}/{}".format(self.address, "_security/_authenticate"), auth=self.auth, verify=self.verify_ssl, headers=self.headers)
 

@@ -1,4 +1,5 @@
-# kibana-auth-proxy
+# elastauth
+[![Docker Repository on Quay](https://quay.io/repository/wasilak/elastauth/status "Docker Repository on Quay")](https://quay.io/repository/wasilak/elastauth) [![Total alerts](https://img.shields.io/lgtm/alerts/g/wasilak/kibana-auth-proxy.svg?logo=lgtm&logoWidth=18)](https://lgtm.com/projects/g/wasilak/kibana-auth-proxy/alerts/) [![Language grade: Python](https://img.shields.io/lgtm/grade/python/g/wasilak/kibana-auth-proxy.svg?logo=lgtm&logoWidth=18)](https://lgtm.com/projects/g/wasilak/kibana-auth-proxy/context:python)
 
 Designed to work as a forwardAuth proxy for Authelia (possibly others, like nginx, not tested) in order to use LDAP/Active Directory for user access in Elasticsearch without paid subscription.
 

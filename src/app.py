@@ -1,6 +1,6 @@
 import logging
 import os
-from flask import Flask, jsonify, request, Response
+from flask import Flask, jsonify, request, Response, render_template
 from models.elasticsearch import Elasticsearch, UserCreationState
 from dotenv import load_dotenv
 import yaml
@@ -98,7 +98,19 @@ def health():
     }), 200
 
 
-@app.route('/')
+@app.route('/config')
+def config():
+
+    if 'Content-Type' in request.headers:
+        if request.headers['Content-Type'] == "text/yaml":
+            return Response(yaml.dump(app.config['config'], default_flow_style=False, explicit_start=True, width=float("inf"), line_break=""), mimetype='text/yaml')
+        if request.headers['Content-Type'] == "application/json":
+            return app.config['config']
+
+    return render_template('config.html', config=yaml.dump(app.config['config']))
+
+
+@ app.route('/')
 def check_user():
     try:
         user = get_user_attribute('User')

@@ -122,7 +122,7 @@ def check_user():
 
         cache = Factory.get_cache()
 
-        cache_key = "test-kibana-proxy-auth-{}".format(user)
+        cache_key = "elastauth-{}".format(user)
 
         if not cache.exists(cache_key):
             password = os.getenv("KIBANA_USER_PASSWORD", secrets.token_urlsafe(PASSWORD_LENGTH))
@@ -148,6 +148,9 @@ def check_user():
                 roles = [
                     app.config['config']['default_role']
                 ]
+
+            print(roles)
+            exit(0)
 
             user_creation_state = elastic.update_user(
                 user,

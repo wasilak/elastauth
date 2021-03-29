@@ -136,16 +136,18 @@ def check_user():
 
             user_groups = request.headers.get("Remote-Groups").split(",")
 
-            roles = [
-                app.config['config']['default_role']
-            ]
-            if app.config['config']['group_mappings']:
-                roles = []
+            roles = []
 
+            if app.config['config']['group_mappings']:
                 for group in user_groups:
                     if group in app.config['config']['group_mappings']:
                         for mapping in app.config['config']['group_mappings'][group]:
                             roles.append(mapping)
+
+            if len(roles) == 0:
+                roles = [
+                    app.config['config']['default_role']
+                ]
 
             user_creation_state = elastic.update_user(
                 user,

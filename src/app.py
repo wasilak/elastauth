@@ -149,9 +149,6 @@ def check_user():
                     app.config['config']['default_role']
                 ]
 
-            print(roles)
-            exit(0)
-
             user_creation_state = elastic.update_user(
                 user,
                 password,

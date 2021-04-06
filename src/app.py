@@ -75,8 +75,14 @@ def get_user_attribute(attribute):
     """Check if Remote user attribute header exists and return value."""
     header_name = 'Remote-' + attribute
     val = request.headers.get(header_name)
-    if not val:
+
+    required_headers = ["User"]
+
+    if not val and attribute in required_headers:
         raise AppException('Header not provided: ' + header_name)
+    else:
+        val = ""
+
     return val
 
 

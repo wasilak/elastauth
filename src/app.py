@@ -170,6 +170,11 @@ def check_user():
             cache.set(cache_key, encrypted_password)
             app.logger.debug("Password generated for {}".format(user))
 
+        # if user cache is valid, and ELASTAUTH_CACHE_EXTEND == "true" then extend cache TTL without changing password
+        if os.getenv("ELASTAUTH_CACHE_EXTEND", "false") == "true" and cache.ttl(cache_key) > 0 and cache.ttl(cache_key) < cache.time_to_live:
+            app.logger.debug("Extending cache TTL (from {} to {}): password generated for {}".format(cache.ttl(cache_key), cache.time_to_live, user))
+            cache.expire(cache_key)
+
         resp = Response()
 
         decrypted_pass = decrypt(cache.get(cache_key), bytes(app.config['SECRET_KEY'], encoding='utf-8')).decode("utf-8")

@@ -128,7 +128,7 @@ def check_user():
 
         cache_key = "elastauth-{}".format(user)
 
-        if not cache.exists(cache_key):
+        if not cache.exists(cache_key) or cache.ttl(cache_key) <= 0:
             password = os.getenv("KIBANA_USER_PASSWORD", secrets.token_urlsafe(PASSWORD_LENGTH))
 
             try:

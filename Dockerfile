@@ -1,4 +1,4 @@
-FROM python:3-alpine
+FROM quay.io/wasilak/python:3-alpine
 
 RUN apk --no-cache --update add build-base
 

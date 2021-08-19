@@ -149,9 +149,7 @@ def check_user():
                             roles.append(mapping)
 
             if len(roles) == 0:
-                roles = [
-                    app.config['config']['default_role']
-                ]
+                roles = app.config['config']['default_roles']
 
             user_creation_state = elastic.update_user(
                 user,

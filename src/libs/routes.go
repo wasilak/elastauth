@@ -13,9 +13,7 @@ import (
 	"github.com/spf13/viper"
 )
 
-// var rdb *redis.Client
 var ctx = context.Background()
-
 var rdb *redis.Client
 
 type HealthResponse struct {
@@ -33,7 +31,6 @@ type configResponse struct {
 }
 
 func MainRoute(c echo.Context) error {
-	// var encryptedPassword, decryptedPassword string
 	log.Debug(c.Request().Header)
 
 	headerName := "Remote-User"
@@ -70,7 +67,6 @@ func MainRoute(c echo.Context) error {
 	}
 
 	encryptedPassword, err := rdb.Get(ctx, cacheKey).Result()
-	// password, err := rdb.Get(ctx, cacheKey).Result()
 
 	if err == redis.Nil {
 		roles := GetUserRoles(userGroups)
@@ -103,7 +99,6 @@ func MainRoute(c echo.Context) error {
 		UpsertUser(user, elasticsearchUser)
 
 		rdb.Set(ctx, cacheKey, encryptedPassword, cacheDuration)
-		// rdb.Set(ctx, cacheKey, password, 600*time.Second)
 	} else if err != nil {
 		panic(err)
 	}
@@ -123,7 +118,6 @@ func MainRoute(c echo.Context) error {
 	decryptedPassword := DecryptPassword(encryptedPassword, viper.GetString("secret_key"))
 
 	c.Response().Header().Set(echo.HeaderAuthorization, "Basic "+basicAuth(user, decryptedPassword))
-	// c.Response().Header().Set(echo.HeaderAuthorization, "Basic "+basicAuth(user, password))
 
 	return c.NoContent(http.StatusOK)
 }

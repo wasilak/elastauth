@@ -48,6 +48,9 @@ func initElasticClient(url, user, pass string) {
 
 	req.Header.Add("Authorization", "Basic "+basicAuth(elasticsearchConnectionDetails.Username, elasticsearchConnectionDetails.Password))
 	resp, err := client.Do(req)
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	defer resp.Body.Close()
 
@@ -76,6 +79,10 @@ func UpsertUser(username string, elasticsearchUser ElasticsearchUser) {
 	req.Header.Add("Authorization", "Basic "+basicAuth(elasticsearchConnectionDetails.Username, elasticsearchConnectionDetails.Password))
 	req.Header.Add("Content-Type", "application/json")
 	resp, err := client.Do(req)
+
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	defer resp.Body.Close()
 

@@ -219,3 +219,6 @@ src/config.yml
 
 # Redis data directory used in docker-compose
 redis
+headers.txt
+test_headers.txt
+

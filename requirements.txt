@@ -1,7 +1,0 @@
-gunicorn
-Flask
-python-dotenv
-pyyaml
-requests
-redis
-pycryptodome

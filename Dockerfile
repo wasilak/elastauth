@@ -1,17 +1,12 @@
-FROM quay.io/wasilak/python:3-alpine
+FROM quay.io/wasilak/golang:1.18-alpine as builder
 
-RUN apk --no-cache --update add build-base
+ADD . /app
+WORKDIR /app/src
+RUN mkdir -p ../dist
+RUN go build -o ../dist/elastauth
 
-COPY ./requirements.txt /requirements.txt
+FROM quay.io/wasilak/alpine:3
 
-RUN pip install -U -r requirements.txt
+COPY --from=builder /app/dist/elastauth /elastauth
 
-ADD src /app
-
-WORKDIR /app
-
-EXPOSE 5000
-
-ENTRYPOINT ["gunicorn", "--bind=0.0.0.0:5000", "--workers=1", "--worker-class=gthread", "--preload", "app:app"]
-
-CMD [ "--log-level=debug" ]
+CMD ["/elastauth"]

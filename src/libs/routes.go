@@ -2,6 +2,7 @@ package libs
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
 	"net/http"
 	"strings"
@@ -66,7 +67,9 @@ func MainRoute(c echo.Context) error {
 		log.Fatal(err)
 	}
 
-	encryptedPassword, err := rdb.Get(ctx, cacheKey).Result()
+	encryptedPasswordBase64, err := rdb.Get(ctx, cacheKey).Result()
+
+	key := viper.GetString("secret_key")
 
 	if err == redis.Nil {
 		roles := GetUserRoles(userGroups)
@@ -81,7 +84,12 @@ func MainRoute(c echo.Context) error {
 		)
 
 		password := GenerateTemporaryUserPassword()
-		encryptedPassword = EncryptPassword(password, viper.GetString("secret_key"))
+
+		encryptedPassword := Encrypt(password, key)
+
+		encryptedPasswordBase64 = string(base64.URLEncoding.EncodeToString([]byte(encryptedPassword)))
+
+		log.Debug(encryptedPasswordBase64)
 
 		elasticsearchUserMetadata := ElasticsearchUserMetadata{
 			Groups: userGroups,
@@ -98,7 +106,7 @@ func MainRoute(c echo.Context) error {
 
 		UpsertUser(user, elasticsearchUser)
 
-		rdb.Set(ctx, cacheKey, encryptedPassword, cacheDuration)
+		rdb.Set(ctx, cacheKey, encryptedPasswordBase64, cacheDuration)
 	} else if err != nil {
 		panic(err)
 	}
@@ -115,7 +123,9 @@ func MainRoute(c echo.Context) error {
 		rdb.Expire(ctx, cacheKey, cacheDuration)
 	}
 
-	decryptedPassword := DecryptPassword(encryptedPassword, viper.GetString("secret_key"))
+	decryptedPasswordBase64, _ := base64.URLEncoding.DecodeString(encryptedPasswordBase64)
+
+	decryptedPassword := Decrypt(string(decryptedPasswordBase64), key)
 
 	c.Response().Header().Set(echo.HeaderAuthorization, "Basic "+basicAuth(user, decryptedPassword))
 

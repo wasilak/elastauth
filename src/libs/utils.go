@@ -63,30 +63,3 @@ func basicAuth(username, pass string) string {
 	auth := username + ":" + pass
 	return base64.StdEncoding.EncodeToString([]byte(auth))
 }
-
-func EncryptPassword(pass, encryptionKey string) string {
-	var (
-		password = []byte(encryptionKey)
-		data     = []byte(pass)
-	)
-
-	ciphertext, err := Encrypt(password, data)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	return string(ciphertext)
-}
-
-func DecryptPassword(encryptedString string, encryptionKey string) string {
-	var (
-		password = []byte(encryptionKey)
-	)
-
-	plaintext, err := Decrypt(password, []byte(encryptedString))
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	return string(plaintext)
-}

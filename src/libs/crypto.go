@@ -1,82 +1,75 @@
 package libs
 
-// courtesy of https://bruinsslot.jp/post/golang-crypto/
+// courtesy of https://www.melvinvivas.com/how-to-encrypt-and-decrypt-data-using-aes
 
 import (
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/rand"
-	"golang.org/x/crypto/scrypt"
+	"encoding/hex"
+	"fmt"
+	"io"
 )
 
-func Encrypt(key, data []byte) ([]byte, error) {
-	key, salt, err := DeriveKey(key, nil)
+func Encrypt(stringToEncrypt string, keyString string) (encryptedString string) {
+
+	//Since the key is in string, we need to convert decode it to bytes
+	key, _ := hex.DecodeString(keyString)
+	plaintext := []byte(stringToEncrypt)
+
+	//Create a new Cipher Block from the key
+	block, err := aes.NewCipher(key)
 	if err != nil {
-		return nil, err
+		panic(err.Error())
 	}
 
-	blockCipher, err := aes.NewCipher(key)
+	//Create a new GCM - https://en.wikipedia.org/wiki/Galois/Counter_Mode
+	//https://golang.org/pkg/crypto/cipher/#NewGCM
+	aesGCM, err := cipher.NewGCM(block)
 	if err != nil {
-		return nil, err
+		panic(err.Error())
 	}
 
-	gcm, err := cipher.NewGCM(blockCipher)
-	if err != nil {
-		return nil, err
+	//Create a nonce. Nonce should be from GCM
+	nonce := make([]byte, aesGCM.NonceSize())
+	if _, err = io.ReadFull(rand.Reader, nonce); err != nil {
+		panic(err.Error())
 	}
 
-	nonce := make([]byte, gcm.NonceSize())
-	if _, err = rand.Read(nonce); err != nil {
-		return nil, err
-	}
-
-	ciphertext := gcm.Seal(nonce, nonce, data, nil)
-
-	ciphertext = append(ciphertext, salt...)
-
-	return ciphertext, nil
+	//Encrypt the data using aesGCM.Seal
+	//Since we don't want to save the nonce somewhere else in this case, we add it as a prefix to the encrypted data. The first nonce argument in Seal is the prefix.
+	ciphertext := aesGCM.Seal(nonce, nonce, plaintext, nil)
+	return fmt.Sprintf("%x", ciphertext)
 }
 
-func Decrypt(key, data []byte) ([]byte, error) {
-	salt, data := data[len(data)-32:], data[:len(data)-32]
+func Decrypt(encryptedString string, keyString string) (decryptedString string) {
 
-	key, _, err := DeriveKey(key, salt)
+	key, _ := hex.DecodeString(keyString)
+	enc, _ := hex.DecodeString(encryptedString)
+
+	//Create a new Cipher Block from the key
+	block, err := aes.NewCipher(key)
 	if err != nil {
-		return nil, err
+		panic(err.Error())
 	}
 
-	blockCipher, err := aes.NewCipher(key)
+	//Create a new GCM
+	aesGCM, err := cipher.NewGCM(block)
 	if err != nil {
-		return nil, err
+		panic(err.Error())
 	}
 
-	gcm, err := cipher.NewGCM(blockCipher)
+	//Get the nonce size
+	nonceSize := aesGCM.NonceSize()
+
+	//Extract the nonce from the encrypted data
+	nonce, ciphertext := enc[:nonceSize], enc[nonceSize:]
+
+	//Decrypt the data
+	plaintext, err := aesGCM.Open(nil, nonce, ciphertext, nil)
 	if err != nil {
-		return nil, err
+		panic(err.Error())
 	}
 
-	nonce, ciphertext := data[:gcm.NonceSize()], data[gcm.NonceSize():]
-
-	plaintext, err := gcm.Open(nil, nonce, ciphertext, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	return plaintext, nil
-}
-
-func DeriveKey(password, salt []byte) ([]byte, []byte, error) {
-	if salt == nil {
-		salt = make([]byte, 32)
-		if _, err := rand.Read(salt); err != nil {
-			return nil, nil, err
-		}
-	}
-
-	key, err := scrypt.Key(password, salt, 16, 8, 1, 32)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	return key, salt, nil
+	return string(plaintext)
 }

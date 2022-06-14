@@ -1,7 +1,11 @@
 package main
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"flag"
+	"fmt"
+	"os"
 	// "github.com/labstack/echo-contrib/prometheus"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
@@ -20,9 +24,10 @@ func main() {
 	}()
 
 	// using standard library "flag" package
-	flag.Bool("debug", false, "debug")
-	flag.String("listen", "127.0.0.1:5000", "listen address")
-	flag.String("config", "./", "path to config.yml")
+	flag.Bool("debug", false, "Debug")
+	flag.Bool("generateKey", false, "Generate valid encryption key for use in app")
+	flag.String("listen", "127.0.0.1:5000", "Listen address")
+	flag.String("config", "./", "Path to config.yml")
 
 	pflag.CommandLine.AddGoFlagSet(flag.CommandLine)
 	pflag.Parse()
@@ -50,6 +55,18 @@ func main() {
 	}
 
 	log.Debug(viper.AllSettings())
+
+	if viper.GetBool("generateKey") {
+		bytes := make([]byte, 32) //generate a random 32 byte key for AES-256
+		if _, err := rand.Read(bytes); err != nil {
+			panic(err.Error())
+		}
+
+		key := hex.EncodeToString(bytes) //encode key in bytes to string for saving
+
+		fmt.Println(key)
+		os.Exit(0)
+	}
 
 	e := echo.New()
 

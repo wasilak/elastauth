@@ -4,7 +4,7 @@ go 1.18
 
 require (
 	github.com/go-redis/redis/v8 v8.8.2
-	github.com/labstack/echo/v4 v4.7.2
+	github.com/labstack/echo/v4 v4.9.0
 	github.com/labstack/gommon v0.3.1
 	github.com/sethvargo/go-password v0.2.0
 	github.com/spf13/pflag v1.0.5

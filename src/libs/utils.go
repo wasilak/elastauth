@@ -11,7 +11,7 @@ import (
 
 func contains(s []string, str string) bool {
 	for _, v := range s {
-		if strings.ToLower(v) == strings.ToLower(str) {
+		if strings.EqualFold(strings.ToLower(v), strings.ToLower(str)) {
 			return true
 		}
 	}
@@ -21,7 +21,7 @@ func contains(s []string, str string) bool {
 func getMapKeys(itemsMap map[string][]string) []string {
 	keys := []string{}
 
-	for k, _ := range itemsMap {
+	for k := range itemsMap {
 		keys = append(keys, k)
 	}
 
@@ -43,11 +43,7 @@ func GetUserRoles(userGroups []string) []string {
 	if len(viper.GetStringMapStringSlice("group_mappings")) > 0 {
 		for _, group := range userGroups {
 			if contains(getMapKeys(viper.GetStringMapStringSlice("group_mappings")), group) {
-				for _, mappings := range viper.GetStringMapStringSlice("group_mappings") {
-					for _, mappingName := range mappings {
-						roles = append(roles, mappingName)
-					}
-				}
+				roles = append(roles, viper.GetStringMapStringSlice("group_mappings")[strings.ToLower(group)]...)
 			}
 		}
 	}

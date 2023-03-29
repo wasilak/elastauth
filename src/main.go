@@ -6,15 +6,16 @@ import (
 	"flag"
 	"fmt"
 	"os"
+
 	// "github.com/labstack/echo-contrib/prometheus"
+	_ "net/http/pprof"
+
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 	"github.com/labstack/gommon/log"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 	"github.com/wasilak/elastauth/libs"
-	"net/http"
-	_ "net/http/pprof"
 	// "strings"
 )
 

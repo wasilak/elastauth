@@ -19,10 +19,6 @@ import (
 )
 
 func main() {
-	go func() {
-		log.Debug(http.ListenAndServe("localhost:6060", nil))
-	}()
-
 	// using standard library "flag" package
 	flag.Bool("debug", false, "Debug")
 	flag.Bool("generateKey", false, "Generate valid encryption key for use in app")

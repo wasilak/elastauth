@@ -24,4 +24,4 @@ remote-name
 remote-user
 ```
 
-![alt text](https://github.com/wasilak/kibana-auth-proxy/blob/main/kibana-auth-proxy.png?raw=true)
+![architecture](https://github.com/wasilak/kibana-auth-proxy/blob/main/kibana-auth-proxy.png?raw=true)

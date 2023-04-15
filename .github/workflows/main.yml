@@ -42,9 +42,9 @@ jobs:
 
       - name: Build executable
         run: |
+          mkdir ./dist
           cd src/
-          mkdir -p ./dist
-          go build -o ./dist/elastauth
+          go build -o ../dist/elastauth
         env:
           GOOS: ${{ matrix.os }}
           GOARCH: ${{ matrix.arch }}

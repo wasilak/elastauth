@@ -1,6 +1,8 @@
 # elastauth
 [![Docker Repository on Quay](https://quay.io/repository/wasilak/elastauth/status "Docker Repository on Quay")](https://quay.io/repository/wasilak/elastauth) [![CI](https://github.com/wasilak/elastauth/actions/workflows/main.yml/badge.svg)](https://github.com/wasilak/elastauth/actions/workflows/main.yml) [![Maintainability](https://api.codeclimate.com/v1/badges/d75cc6b44c7c33f0b530/maintainability)](https://codeclimate.com/github/wasilak/elastauth/maintainability)
 
+<img align="left" src="https://github.com/wasilak/elastauth/blob/main/gopher.png?raw=true" width="40%" height="40%" />
+
 Designed to work as a forwardAuth proxy for Authelia (possibly others, like nginx, but not tested) in order to use LDAP/Active Directory for user access in Elasticsearch without paid subscription.
 
 1. Request goes to Traefik

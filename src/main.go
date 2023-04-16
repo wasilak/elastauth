@@ -1,8 +1,6 @@
 package main
 
 import (
-	"crypto/rand"
-	"encoding/hex"
 	"flag"
 	"fmt"
 	"os"
@@ -16,11 +14,9 @@ import (
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 	"github.com/wasilak/elastauth/libs"
-	// "strings"
 )
 
 func main() {
-	// using standard library "flag" package
 	flag.Bool("debug", false, "Debug")
 	flag.Bool("generateKey", false, "Generate valid encryption key for use in app")
 	flag.String("listen", "127.0.0.1:5000", "Listen address")
@@ -33,18 +29,16 @@ func main() {
 	viper.SetEnvPrefix("elastauth")
 	viper.AutomaticEnv()
 
-	viper.SetConfigName("config")                  // name of config file (without extension)
-	viper.SetConfigType("yaml")                    // REQUIRED if the config file does not have the extension in the name
-	viper.AddConfigPath(viper.GetString("config")) // path to look for the config file in
-	viperErr := viper.ReadInConfig()               // Find and read the config file
+	viper.SetConfigName("config")
+	viper.SetConfigType("yaml")
+	viper.AddConfigPath(viper.GetString("config"))
 
-	if viperErr != nil { // Handle errors reading the config file
+	viper.SetDefault("cache_type", "memory")
+	viperErr := viper.ReadInConfig()
+
+	if viperErr != nil {
 		log.Fatal(viperErr)
 		panic(viperErr)
-	}
-
-	if len(viper.GetString("secret_key")) == 0 {
-		log.Fatal("Secret key for password encryption not provided")
 	}
 
 	if viper.GetBool("debug") {
@@ -54,30 +48,30 @@ func main() {
 	log.Debug(viper.AllSettings())
 
 	if viper.GetBool("generateKey") {
-		bytes := make([]byte, 32) //generate a random 32 byte key for AES-256
-		if _, err := rand.Read(bytes); err != nil {
-			panic(err.Error())
-		}
-
-		key := hex.EncodeToString(bytes) //encode key in bytes to string for saving
-
+		key := libs.GenerateKey()
 		fmt.Println(key)
 		os.Exit(0)
 	}
 
-	e := echo.New()
+	if len(viper.GetString("secret_key")) == 0 {
+		key := libs.GenerateKey()
+		viper.Set("secret_key", key)
+		log.Info(fmt.Sprintf("WARNING: No secret key provided. Setting randomly generated: %s", key))
+	}
 
-	// e.Use(middleware.GzipWithConfig(middleware.GzipConfig{
-	// 	Skipper: func(c echo.Context) bool {
-	// 		return strings.Contains(c.Path(), "metrics")
-	// 	},
-	// }))
+	e := echo.New()
 
 	e.HideBanner = true
 
 	e.Debug = viper.GetBool("debug")
 
 	e.Use(middleware.Logger())
+
+	// e.Use(middleware.GzipWithConfig(middleware.GzipConfig{
+	// 	Skipper: func(c echo.Context) bool {
+	// 		return strings.Contains(c.Path(), "metrics")
+	// 	},
+	// }))
 
 	// // Enable metrics middleware
 	// p := prometheus.NewPrometheus("echo", nil)

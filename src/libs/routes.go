@@ -1,21 +1,17 @@
 package libs
 
 import (
-	"context"
 	"encoding/base64"
 	"fmt"
 	"net/http"
 	"strings"
 	"time"
 
-	"github.com/go-redis/redis/v8"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/gommon/log"
 	"github.com/spf13/viper"
+	"github.com/wasilak/elastauth/cache"
 )
-
-var ctx = context.Background()
-var rdb *redis.Client
 
 type HealthResponse struct {
 	Status string `json:"status"`
@@ -55,23 +51,32 @@ func MainRoute(c echo.Context) error {
 		log.Error(errorMessage)
 	}
 
-	rdb = redis.NewClient(&redis.Options{
-		Addr: fmt.Sprintf("%s:%s", viper.GetString("redis_host"), viper.GetString("redis_port")),
-		DB:   viper.GetInt("redis_db"),
-	})
-
-	cacheKey := "elastauth-" + user
-
 	cacheDuration, err := time.ParseDuration(viper.GetString("redis_expire_seconds"))
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	encryptedPasswordBase64, err := rdb.Get(ctx, cacheKey).Result()
+	var cacheInstance cache.CacheInterface
+	if viper.GetString("cache_type") == "memory" {
+		cacheInstance = &cache.RedisCache{
+			Address: fmt.Sprintf("%s:%s", viper.GetString("redis_host"), viper.GetString("redis_port")),
+			DB:      viper.GetInt("redis_db"),
+		}
+	} else if viper.GetString("cache_type") == "memory" {
+		cacheInstance = &cache.RistrettoCache{}
+	} else {
+		log.Fatal("No cache_type selected or cache type is invalid")
+	}
+
+	cacheInstance.Init(cacheDuration)
+
+	cacheKey := "elastauth-" + user
+
+	encryptedPasswordBase64, exists := cacheInstance.Get(cacheKey)
 
 	key := viper.GetString("secret_key")
 
-	if err == redis.Nil {
+	if exists {
 		roles := GetUserRoles(userGroups)
 
 		userEmail := c.Request().Header.Get("Remote-Email")
@@ -106,24 +111,21 @@ func MainRoute(c echo.Context) error {
 
 		UpsertUser(user, elasticsearchUser)
 
-		rdb.Set(ctx, cacheKey, encryptedPasswordBase64, cacheDuration)
+		cacheInstance.Set(cacheKey, encryptedPasswordBase64)
 	} else if err != nil {
 		panic(err)
 	}
 
-	itemCacheDuration, err := rdb.TTL(ctx, cacheKey).Result()
-	if err != nil {
-		log.Fatal(err)
-	}
+	itemCacheDuration, _ := cacheInstance.GetTTL(cacheKey)
 
 	log.Debug(cacheDuration, itemCacheDuration)
 
 	if viper.GetBool("extend_cache") && itemCacheDuration > 0 && itemCacheDuration < cacheDuration {
 		log.Debug(fmt.Sprintf("User %s: extending cache TTL (from %s to %s)", user, itemCacheDuration, viper.GetString("redis_expire_seconds")))
-		rdb.Expire(ctx, cacheKey, cacheDuration)
+		cacheInstance.ExtendTTL(cacheKey, encryptedPasswordBase64)
 	}
 
-	decryptedPasswordBase64, _ := base64.URLEncoding.DecodeString(encryptedPasswordBase64)
+	decryptedPasswordBase64, _ := base64.URLEncoding.DecodeString(encryptedPasswordBase64.(string))
 
 	decryptedPassword := Decrypt(string(decryptedPasswordBase64), key)
 

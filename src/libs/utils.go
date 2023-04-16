@@ -1,7 +1,9 @@
 package libs
 
 import (
+	"crypto/rand"
 	"encoding/base64"
+	"encoding/hex"
 	"strings"
 
 	"github.com/labstack/gommon/log"
@@ -58,4 +60,14 @@ func GetUserRoles(userGroups []string) []string {
 func basicAuth(username, pass string) string {
 	auth := username + ":" + pass
 	return base64.StdEncoding.EncodeToString([]byte(auth))
+}
+
+func GenerateKey() string {
+	bytes := make([]byte, 32) //generate a random 32 byte key for AES-256
+	if _, err := rand.Read(bytes); err != nil {
+		panic(err.Error())
+	}
+
+	return hex.EncodeToString(bytes) //encode key in bytes to string for saving
+
 }

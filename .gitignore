@@ -221,4 +221,5 @@ src/config.yml
 redis
 headers.txt
 test_headers.txt
-
+cookie-jar.txt
+**/.envrc

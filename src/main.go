@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"time"
 
 	// "github.com/labstack/echo-contrib/prometheus"
 	_ "net/http/pprof"
@@ -13,6 +14,7 @@ import (
 	"github.com/labstack/gommon/log"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
+	"github.com/wasilak/elastauth/cache"
 	"github.com/wasilak/elastauth/libs"
 )
 
@@ -34,6 +36,16 @@ func main() {
 	viper.AddConfigPath(viper.GetString("config"))
 
 	viper.SetDefault("cache_type", "memory")
+	viper.SetDefault("redis_host", "localhost:6379")
+	viper.SetDefault("redis_db", 0)
+	viper.SetDefault("cache_expire", "1h")
+	viper.SetDefault("elasticsearch_dry_run", false)
+
+	viper.SetDefault("headers_username", "Remote-User")
+	viper.SetDefault("headers_groups", "Remote-Groups")
+	viper.SetDefault("headers_Email", "Remote-Email")
+	viper.SetDefault("headers_name", "Remote-Name")
+
 	viperErr := viper.ReadInConfig()
 
 	if viperErr != nil {
@@ -44,8 +56,6 @@ func main() {
 	if viper.GetBool("debug") {
 		log.SetLevel(log.DEBUG)
 	}
-
-	log.Debug(viper.AllSettings())
 
 	if viper.GetBool("generateKey") {
 		key := libs.GenerateKey()
@@ -58,6 +68,29 @@ func main() {
 		viper.Set("secret_key", key)
 		log.Info(fmt.Sprintf("WARNING: No secret key provided. Setting randomly generated: %s", key))
 	}
+
+	log.Debug(viper.AllSettings())
+
+	cacheDuration, err := time.ParseDuration(viper.GetString("cache_expire"))
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	if viper.GetString("cache_type") == "redis" {
+		cache.CacheInstance = &cache.RedisCache{
+			Address: viper.GetString("redis_host"),
+			DB:      viper.GetInt("redis_db"),
+			TTL:     cacheDuration,
+		}
+	} else if viper.GetString("cache_type") == "memory" {
+		cache.CacheInstance = &cache.GoCache{
+			TTL: cacheDuration,
+		}
+	} else {
+		log.Fatal("No cache_type selected or cache type is invalid")
+	}
+
+	cache.CacheInstance.Init(cacheDuration)
 
 	e := echo.New()
 

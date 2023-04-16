@@ -12,12 +12,16 @@ services:
       - redis
     volumes:
       - "./config.yml:/app/config.yml"
-
   redis:
     image: redis:alpine
     container_name: redis
     volumes:
-      - ./redis:/data
+      - redis:/data
     expose:
       - 6379
+    ports:
+      - "6379:6379"
     restart: unless-stopped
+
+volumes:
+  redis:

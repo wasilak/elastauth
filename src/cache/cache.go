@@ -6,6 +6,9 @@ type CacheInterface interface {
 	Init(cacheDuration time.Duration)
 	Get(cacheKey string) (interface{}, bool)
 	Set(cacheKey string, item interface{})
-	GetTTL(cacheKey string) (time.Duration, bool)
+	GetItemTTL(cacheKey string) (time.Duration, bool)
+	GetTTL() time.Duration
 	ExtendTTL(cacheKey string, item interface{})
 }
+
+var CacheInstance CacheInterface

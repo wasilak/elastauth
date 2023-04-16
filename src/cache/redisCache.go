@@ -27,10 +27,14 @@ func (c *RedisCache) Init(cacheDuration time.Duration) {
 	c.TTL = cacheDuration
 }
 
+func (c *RedisCache) GetTTL() time.Duration {
+	return c.TTL
+}
+
 func (c *RedisCache) Get(cacheKey string) (interface{}, bool) {
 	item, err := c.Cache.Get(c.CTX, cacheKey).Result()
 
-	if err != nil {
+	if err != nil || len(item) == 0 {
 		log.Info(err)
 		return item, false
 	}
@@ -39,10 +43,10 @@ func (c *RedisCache) Get(cacheKey string) (interface{}, bool) {
 }
 
 func (c *RedisCache) Set(cacheKey string, item interface{}) {
-	c.Cache.Set(c.CTX, cacheKey, item, c.TTL)
+	c.Cache.Set(c.CTX, cacheKey, item, c.TTL).Err()
 }
 
-func (c *RedisCache) GetTTL(cacheKey string) (time.Duration, bool) {
+func (c *RedisCache) GetItemTTL(cacheKey string) (time.Duration, bool) {
 	item, err := c.Cache.TTL(c.CTX, cacheKey).Result()
 
 	if err != nil {

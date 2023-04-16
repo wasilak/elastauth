@@ -3,3 +3,8 @@ default_roles:
 group_mappings:
   your_ad_group:
     - your_kibana_role
+headers:
+  username: Remote-User
+  groups: Remote-Groups
+  email: Remote-Email
+  name: Remote-Name

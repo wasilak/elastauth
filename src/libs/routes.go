@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
-	"time"
 
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/gommon/log"
@@ -30,7 +29,7 @@ type configResponse struct {
 func MainRoute(c echo.Context) error {
 	log.Debug(c.Request().Header)
 
-	headerName := "Remote-User"
+	headerName := viper.GetString("headers_username")
 	user := c.Request().Header.Get(headerName)
 
 	if len(user) == 0 {
@@ -43,7 +42,7 @@ func MainRoute(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, response)
 	}
 
-	headerName = "Remote-Groups"
+	headerName = viper.GetString("headers_groups")
 	userGroups := strings.Split(c.Request().Header.Get(headerName), ",")
 
 	if len(userGroups) == 0 {
@@ -51,50 +50,27 @@ func MainRoute(c echo.Context) error {
 		log.Error(errorMessage)
 	}
 
-	cacheDuration, err := time.ParseDuration(viper.GetString("redis_expire_seconds"))
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	var cacheInstance cache.CacheInterface
-	if viper.GetString("cache_type") == "memory" {
-		cacheInstance = &cache.RedisCache{
-			Address: fmt.Sprintf("%s:%s", viper.GetString("redis_host"), viper.GetString("redis_port")),
-			DB:      viper.GetInt("redis_db"),
-		}
-	} else if viper.GetString("cache_type") == "memory" {
-		cacheInstance = &cache.RistrettoCache{}
-	} else {
-		log.Fatal("No cache_type selected or cache type is invalid")
-	}
-
-	cacheInstance.Init(cacheDuration)
-
 	cacheKey := "elastauth-" + user
-
-	encryptedPasswordBase64, exists := cacheInstance.Get(cacheKey)
 
 	key := viper.GetString("secret_key")
 
+	encryptedPasswordBase64, exists := cache.CacheInstance.Get(cacheKey)
+
 	if exists {
+		log.Debug(fmt.Sprintf("Cache hit: %s", cacheKey))
+	} else {
+		log.Debug(fmt.Sprintf("Cache miss: %s", cacheKey))
+	}
+
+	if !exists {
 		roles := GetUserRoles(userGroups)
 
-		userEmail := c.Request().Header.Get("Remote-Email")
-		userName := c.Request().Header.Get("Remote-Name")
-
-		initElasticClient(
-			viper.GetString("elasticsearch_host"),
-			viper.GetString("elasticsearch_username"),
-			viper.GetString("elasticsearch_password"),
-		)
+		userEmail := c.Request().Header.Get(viper.GetString("headers_email"))
+		userName := c.Request().Header.Get(viper.GetString("headers_name"))
 
 		password := GenerateTemporaryUserPassword()
-
 		encryptedPassword := Encrypt(password, key)
-
 		encryptedPasswordBase64 = string(base64.URLEncoding.EncodeToString([]byte(encryptedPassword)))
-
-		log.Debug(encryptedPasswordBase64)
 
 		elasticsearchUserMetadata := ElasticsearchUserMetadata{
 			Groups: userGroups,
@@ -109,20 +85,24 @@ func MainRoute(c echo.Context) error {
 			Metadata: elasticsearchUserMetadata,
 		}
 
-		UpsertUser(user, elasticsearchUser)
+		if !viper.GetBool("elasticsearch_dry_run") {
+			initElasticClient(
+				viper.GetString("elasticsearch_host"),
+				viper.GetString("elasticsearch_username"),
+				viper.GetString("elasticsearch_password"),
+			)
 
-		cacheInstance.Set(cacheKey, encryptedPasswordBase64)
-	} else if err != nil {
-		panic(err)
+			UpsertUser(user, elasticsearchUser)
+		}
+
+		cache.CacheInstance.Set(cacheKey, encryptedPasswordBase64)
 	}
 
-	itemCacheDuration, _ := cacheInstance.GetTTL(cacheKey)
+	itemCacheDuration, _ := cache.CacheInstance.GetItemTTL(cacheKey)
 
-	log.Debug(cacheDuration, itemCacheDuration)
-
-	if viper.GetBool("extend_cache") && itemCacheDuration > 0 && itemCacheDuration < cacheDuration {
-		log.Debug(fmt.Sprintf("User %s: extending cache TTL (from %s to %s)", user, itemCacheDuration, viper.GetString("redis_expire_seconds")))
-		cacheInstance.ExtendTTL(cacheKey, encryptedPasswordBase64)
+	if viper.GetBool("extend_cache") && itemCacheDuration > 0 && itemCacheDuration < cache.CacheInstance.GetTTL() {
+		log.Debug(fmt.Sprintf("User %s: extending cache TTL (from %s to %s)", user, itemCacheDuration, viper.GetString("cache_expire")))
+		cache.CacheInstance.ExtendTTL(cacheKey, encryptedPasswordBase64)
 	}
 
 	decryptedPasswordBase64, _ := base64.URLEncoding.DecodeString(encryptedPasswordBase64.(string))

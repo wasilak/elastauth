@@ -16,6 +16,7 @@ import (
 	"github.com/spf13/viper"
 	"github.com/wasilak/elastauth/cache"
 	"github.com/wasilak/elastauth/libs"
+	_ "go.uber.org/automaxprocs"
 )
 
 func main() {

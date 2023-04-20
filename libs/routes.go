@@ -27,8 +27,6 @@ type configResponse struct {
 }
 
 func MainRoute(c echo.Context) error {
-	log.Debug(c.Request().Header)
-
 	headerName := viper.GetString("headers_username")
 	user := c.Request().Header.Get(headerName)
 
@@ -68,7 +66,11 @@ func MainRoute(c echo.Context) error {
 		userEmail := c.Request().Header.Get(viper.GetString("headers_email"))
 		userName := c.Request().Header.Get(viper.GetString("headers_name"))
 
-		password := GenerateTemporaryUserPassword()
+		password, err := GenerateTemporaryUserPassword()
+		if err != nil {
+			log.Error(err)
+			return c.JSON(http.StatusInternalServerError, err)
+		}
 		encryptedPassword := Encrypt(password, key)
 		encryptedPasswordBase64 = string(base64.URLEncoding.EncodeToString([]byte(encryptedPassword)))
 
@@ -86,13 +88,21 @@ func MainRoute(c echo.Context) error {
 		}
 
 		if !viper.GetBool("elasticsearch_dry_run") {
-			initElasticClient(
+			err := initElasticClient(
 				viper.GetString("elasticsearch_host"),
 				viper.GetString("elasticsearch_username"),
 				viper.GetString("elasticsearch_password"),
 			)
+			if err != nil {
+				log.Error(err)
+				return c.JSON(http.StatusInternalServerError, err)
+			}
 
-			UpsertUser(user, elasticsearchUser)
+			err = UpsertUser(user, elasticsearchUser)
+			if err != nil {
+				log.Error(err)
+				return c.JSON(http.StatusInternalServerError, err)
+			}
 		}
 
 		cache.CacheInstance.Set(cacheKey, encryptedPasswordBase64)

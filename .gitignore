@@ -223,3 +223,4 @@ headers.txt
 test_headers.txt
 cookie-jar.txt
 **/.envrc
+coverage.out

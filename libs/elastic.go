@@ -32,7 +32,7 @@ type ElasticsearchUser struct {
 
 var elasticsearchConnectionDetails ElasticsearchConnectionDetails
 
-func initElasticClient(url, user, pass string) {
+func initElasticClient(url, user, pass string) error {
 	client = &http.Client{}
 
 	elasticsearchConnectionDetails = ElasticsearchConnectionDetails{
@@ -43,13 +43,13 @@ func initElasticClient(url, user, pass string) {
 
 	req, err := http.NewRequest("GET", elasticsearchConnectionDetails.URL, nil)
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 
 	req.Header.Add("Authorization", "Basic "+basicAuth(elasticsearchConnectionDetails.Username, elasticsearchConnectionDetails.Password))
 	resp, err := client.Do(req)
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 
 	defer resp.Body.Close()
@@ -59,21 +59,23 @@ func initElasticClient(url, user, pass string) {
 	json.NewDecoder(resp.Body).Decode(&body)
 
 	log.Debug(body)
+
+	return nil
 }
 
-func UpsertUser(username string, elasticsearchUser ElasticsearchUser) {
+func UpsertUser(username string, elasticsearchUser ElasticsearchUser) error {
 	client = &http.Client{}
 
 	url := fmt.Sprintf("%s/_security/user/%s", elasticsearchConnectionDetails.URL, username)
 
 	jsonPayload, err := json.Marshal(elasticsearchUser)
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 
 	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonPayload))
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 
 	req.Header.Add("Authorization", "Basic "+basicAuth(elasticsearchConnectionDetails.Username, elasticsearchConnectionDetails.Password))
@@ -81,7 +83,7 @@ func UpsertUser(username string, elasticsearchUser ElasticsearchUser) {
 	resp, err := client.Do(req)
 
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 
 	defer resp.Body.Close()
@@ -91,4 +93,6 @@ func UpsertUser(username string, elasticsearchUser ElasticsearchUser) {
 	json.NewDecoder(resp.Body).Decode(&body)
 
 	log.Debug(body)
+
+	return nil
 }

@@ -6,7 +6,6 @@ import (
 	"encoding/hex"
 	"strings"
 
-	"github.com/labstack/gommon/log"
 	"github.com/sethvargo/go-password/password"
 	"github.com/spf13/viper"
 )
@@ -30,14 +29,14 @@ func getMapKeys(itemsMap map[string][]string) []string {
 	return keys
 }
 
-func GenerateTemporaryUserPassword() string {
+func GenerateTemporaryUserPassword() (string, error) {
 	// Generate a password that is 32 characters long with 6 digits, 6 symbols,
 	// allowing upper and lower case letters, disallowing repeat characters.
 	res, err := password.Generate(32, 10, 0, false, false)
 	if err != nil {
-		log.Fatal(err)
+		return "", err
 	}
-	return res
+	return res, nil
 }
 
 func GetUserRoles(userGroups []string) []string {
@@ -62,12 +61,12 @@ func basicAuth(username, pass string) string {
 	return base64.StdEncoding.EncodeToString([]byte(auth))
 }
 
-func GenerateKey() string {
+func GenerateKey() (string, error) {
 	bytes := make([]byte, 32) //generate a random 32 byte key for AES-256
 	if _, err := rand.Read(bytes); err != nil {
-		panic(err.Error())
+		return "", err
 	}
 
-	return hex.EncodeToString(bytes) //encode key in bytes to string for saving
+	return hex.EncodeToString(bytes), nil //encode key in bytes to string for saving
 
 }

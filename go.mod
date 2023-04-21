@@ -11,7 +11,6 @@ require (
 	github.com/spf13/pflag v1.0.5
 	github.com/spf13/viper v1.15.0
 	github.com/stretchr/testify v1.8.2
-	go.uber.org/automaxprocs v1.5.2
 	golang.org/x/exp v0.0.0-20230420155640-133eef4313cb
 )
 

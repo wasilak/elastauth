@@ -5,18 +5,17 @@ import (
 	"github.com/wasilak/elastauth/cache"
 	"github.com/wasilak/elastauth/libs"
 	"github.com/wasilak/elastauth/logger"
-	_ "go.uber.org/automaxprocs"
 	"golang.org/x/exp/slog"
 )
 
 func main() {
-	viper.SetDefault("log_file", "./elastauth.log")
-	logger.LoggerInit()
 
 	err := libs.InitConfiguration()
 	if err != nil {
 		panic(err)
 	}
+
+	logger.LoggerInit()
 
 	err = libs.HandleSecretKey()
 	if err != nil {

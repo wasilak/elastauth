@@ -14,7 +14,6 @@ var LogLevel *slog.LevelVar
 var LoggerInstance *slog.Logger
 
 func LoggerInit() {
-	LogLevel = new(slog.LevelVar)
 
 	opts := slog.HandlerOptions{
 		Level:     LogLevel,
@@ -27,6 +26,11 @@ func LoggerInit() {
 	}
 	mw := io.MultiWriter(os.Stdout, file)
 
-	textHandler := opts.NewTextHandler(mw)
-	LoggerInstance = slog.New(textHandler)
+	var handler slog.Handler
+	if viper.GetString("log_format") == "json" {
+		handler = opts.NewJSONHandler(mw)
+	} else {
+		handler = opts.NewTextHandler(mw)
+	}
+	LoggerInstance = slog.New(handler)
 }

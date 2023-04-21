@@ -16,6 +16,8 @@ func WebserverInit() {
 
 	e.HideBanner = true
 
+	e.HidePort = true
+
 	e.Debug = viper.GetBool("debug")
 
 	e.Use(middleware.Logger())
@@ -28,7 +30,7 @@ func WebserverInit() {
 		}))
 
 		// Enable metrics middleware
-		p := prometheus.NewPrometheus("echo", nil)
+		p := prometheus.NewPrometheus("elastauth", nil)
 		p.Use(e)
 	}
 

@@ -3,6 +3,7 @@ package libs
 import (
 	"flag"
 	"fmt"
+	"log"
 	"os"
 
 	"golang.org/x/exp/slog"
@@ -42,10 +43,15 @@ func InitConfiguration() error {
 
 	viper.SetDefault("enable_metrics", false)
 
+	viper.SetDefault("log_file", "./elastauth.log")
+	viper.SetDefault("log_format", "text")
+
 	err := viper.ReadInConfig()
 	if err != nil {
-		logger.LoggerInstance.Error("error", err)
+		log.Println(err)
 	}
+
+	logger.LogLevel = new(slog.LevelVar)
 
 	if viper.GetBool("debug") {
 		logger.LogLevel.Set(slog.LevelDebug)

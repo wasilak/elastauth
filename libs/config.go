@@ -39,6 +39,8 @@ func InitConfiguration() error {
 	viper.SetDefault("headers_Email", "Remote-Email")
 	viper.SetDefault("headers_name", "Remote-Name")
 
+	viper.SetDefault("enable_metrics", false)
+
 	err := viper.ReadInConfig()
 	if err != nil {
 		log.Fatal(err)

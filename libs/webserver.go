@@ -1,8 +1,10 @@
 package libs
 
 import (
-	// "github.com/labstack/echo-contrib/prometheus"
 	_ "net/http/pprof"
+	"strings"
+
+	"github.com/labstack/echo-contrib/prometheus"
 
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
@@ -18,15 +20,17 @@ func WebserverInit() {
 
 	e.Use(middleware.Logger())
 
-	// e.Use(middleware.GzipWithConfig(middleware.GzipConfig{
-	// 	Skipper: func(c echo.Context) bool {
-	// 		return strings.Contains(c.Path(), "metrics")
-	// 	},
-	// }))
+	if viper.GetBool("enable_metrics") {
+		e.Use(middleware.GzipWithConfig(middleware.GzipConfig{
+			Skipper: func(c echo.Context) bool {
+				return strings.Contains(c.Path(), "metrics")
+			},
+		}))
 
-	// // Enable metrics middleware
-	// p := prometheus.NewPrometheus("echo", nil)
-	// p.Use(e)
+		// Enable metrics middleware
+		p := prometheus.NewPrometheus("echo", nil)
+		p.Use(e)
+	}
 
 	e.GET("/", MainRoute)
 	e.GET("/health", HealthRoute)

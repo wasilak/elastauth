@@ -1,22 +1,29 @@
 package main
 
 import (
-	"github.com/labstack/gommon/log"
 	"github.com/spf13/viper"
 	"github.com/wasilak/elastauth/cache"
 	"github.com/wasilak/elastauth/libs"
+	"github.com/wasilak/elastauth/logger"
 	_ "go.uber.org/automaxprocs"
+	"golang.org/x/exp/slog"
 )
 
 func main() {
+	viper.SetDefault("log_file", "./elastauth.log")
+	logger.LoggerInit()
+
 	err := libs.InitConfiguration()
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 
-	libs.HandleSecretKey()
+	err = libs.HandleSecretKey()
+	if err != nil {
+		panic(err)
+	}
 
-	log.Debug(viper.AllSettings())
+	logger.LoggerInstance.Debug("logger", slog.Any("setings", viper.AllSettings()))
 
 	cache.CacheInit()
 

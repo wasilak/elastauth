@@ -5,10 +5,11 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/labstack/gommon/log"
+	"golang.org/x/exp/slog"
 
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
+	"github.com/wasilak/elastauth/logger"
 )
 
 func InitConfiguration() error {
@@ -43,22 +44,21 @@ func InitConfiguration() error {
 
 	err := viper.ReadInConfig()
 	if err != nil {
-		log.Fatal(err)
-		return err
+		logger.LoggerInstance.Error("error", err)
 	}
 
 	if viper.GetBool("debug") {
-		log.SetLevel(log.DEBUG)
+		logger.LogLevel.Set(slog.LevelDebug)
 	}
 
 	return nil
 }
 
-func HandleSecretKey() {
+func HandleSecretKey() error {
 	if viper.GetBool("generateKey") {
 		key, err := GenerateKey()
 		if err != nil {
-			log.Fatal(err)
+			panic(err)
 		}
 		fmt.Println(key)
 		os.Exit(0)
@@ -67,9 +67,11 @@ func HandleSecretKey() {
 	if len(viper.GetString("secret_key")) == 0 {
 		key, err := GenerateKey()
 		if err != nil {
-			log.Fatal(err)
+			return err
 		}
 		viper.Set("secret_key", key)
-		log.Info(fmt.Sprintf("WARNING: No secret key provided. Setting randomly generated: %s", key))
+		logger.LoggerInstance.Info("WARNING: No secret key provided. Setting randomly generated", slog.String("key", key))
 	}
+
+	return nil
 }

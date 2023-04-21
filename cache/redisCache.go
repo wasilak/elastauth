@@ -5,7 +5,8 @@ import (
 	"time"
 
 	"github.com/go-redis/redis/v8"
-	"github.com/labstack/gommon/log"
+	"github.com/wasilak/elastauth/logger"
+	"golang.org/x/exp/slog"
 )
 
 type RedisCache struct {
@@ -35,7 +36,7 @@ func (c *RedisCache) Get(cacheKey string) (interface{}, bool) {
 	item, err := c.Cache.Get(c.CTX, cacheKey).Result()
 
 	if err != nil || len(item) == 0 {
-		log.Info(err)
+		logger.LoggerInstance.Error("Error", slog.Any("message", err))
 		return item, false
 	}
 
@@ -50,7 +51,7 @@ func (c *RedisCache) GetItemTTL(cacheKey string) (time.Duration, bool) {
 	item, err := c.Cache.TTL(c.CTX, cacheKey).Result()
 
 	if err != nil {
-		log.Info(err)
+		logger.LoggerInstance.Error("Error", slog.Any("message", err))
 		return item, false
 	}
 

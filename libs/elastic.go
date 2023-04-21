@@ -6,7 +6,8 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/labstack/gommon/log"
+	"github.com/wasilak/elastauth/logger"
+	"golang.org/x/exp/slog"
 )
 
 var client *http.Client
@@ -58,7 +59,7 @@ func initElasticClient(url, user, pass string) error {
 
 	json.NewDecoder(resp.Body).Decode(&body)
 
-	log.Debug(body)
+	logger.LoggerInstance.Debug("Request response", slog.Any("body", body))
 
 	return nil
 }
@@ -92,7 +93,7 @@ func UpsertUser(username string, elasticsearchUser ElasticsearchUser) error {
 
 	json.NewDecoder(resp.Body).Decode(&body)
 
-	log.Debug(body)
+	logger.LoggerInstance.Debug("Request response", slog.Any("body", body))
 
 	return nil
 }

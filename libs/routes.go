@@ -7,9 +7,10 @@ import (
 	"strings"
 
 	"github.com/labstack/echo/v4"
-	"github.com/labstack/gommon/log"
 	"github.com/spf13/viper"
 	"github.com/wasilak/elastauth/cache"
+	"github.com/wasilak/elastauth/logger"
+	"golang.org/x/exp/slog"
 )
 
 type HealthResponse struct {
@@ -32,7 +33,7 @@ func MainRoute(c echo.Context) error {
 
 	if len(user) == 0 {
 		errorMessage := "Header not provided: " + headerName
-		log.Error(errorMessage)
+		logger.LoggerInstance.Error(errorMessage)
 		response := ErrorResponse{
 			Message: errorMessage,
 			Code:    http.StatusBadRequest,
@@ -45,7 +46,7 @@ func MainRoute(c echo.Context) error {
 
 	if len(userGroups) == 0 {
 		errorMessage := "Header not provided: " + headerName
-		log.Error(errorMessage)
+		logger.LoggerInstance.Error(errorMessage)
 	}
 
 	cacheKey := "elastauth-" + user
@@ -55,9 +56,9 @@ func MainRoute(c echo.Context) error {
 	encryptedPasswordBase64, exists := cache.CacheInstance.Get(cacheKey)
 
 	if exists {
-		log.Debug(fmt.Sprintf("Cache hit: %s", cacheKey))
+		logger.LoggerInstance.Debug("Cache hit", slog.String("cacheKey", cacheKey))
 	} else {
-		log.Debug(fmt.Sprintf("Cache miss: %s", cacheKey))
+		logger.LoggerInstance.Debug("Cache miss", slog.String("cacheKey", cacheKey))
 	}
 
 	if !exists {
@@ -68,7 +69,7 @@ func MainRoute(c echo.Context) error {
 
 		password, err := GenerateTemporaryUserPassword()
 		if err != nil {
-			log.Error(err)
+			logger.LoggerInstance.Error("Error", slog.Any("message", err))
 			return c.JSON(http.StatusInternalServerError, err)
 		}
 		encryptedPassword := Encrypt(password, key)
@@ -94,13 +95,13 @@ func MainRoute(c echo.Context) error {
 				viper.GetString("elasticsearch_password"),
 			)
 			if err != nil {
-				log.Error(err)
+				logger.LoggerInstance.Error("Error", slog.Any("message", err))
 				return c.JSON(http.StatusInternalServerError, err)
 			}
 
 			err = UpsertUser(user, elasticsearchUser)
 			if err != nil {
-				log.Error(err)
+				logger.LoggerInstance.Error("Error", slog.Any("message", err))
 				return c.JSON(http.StatusInternalServerError, err)
 			}
 		}
@@ -111,7 +112,7 @@ func MainRoute(c echo.Context) error {
 	itemCacheDuration, _ := cache.CacheInstance.GetItemTTL(cacheKey)
 
 	if viper.GetBool("extend_cache") && itemCacheDuration > 0 && itemCacheDuration < cache.CacheInstance.GetTTL() {
-		log.Debug(fmt.Sprintf("User %s: extending cache TTL (from %s to %s)", user, itemCacheDuration, viper.GetString("cache_expire")))
+		logger.LoggerInstance.Debug(fmt.Sprintf("User %s: extending cache TTL (from %s to %s)", user, itemCacheDuration, viper.GetString("cache_expire")))
 		cache.CacheInstance.ExtendTTL(cacheKey, encryptedPasswordBase64)
 	}
 

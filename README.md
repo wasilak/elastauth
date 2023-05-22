@@ -1,6 +1,6 @@
 # elastauth
 
-[![Docker Repository on Quay](https://quay.io/repository/wasilak/elastauth/status "Docker Repository on Quay")](https://quay.io/repository/wasilak/elastauth) [![CI](https://github.com/wasilak/elastauth/actions/workflows/main.yml/badge.svg)](https://github.com/wasilak/elastauth/actions/workflows/main.yml) [![Maintainability](https://api.codeclimate.com/v1/badges/d75cc6b44c7c33f0b530/maintainability)](https://codeclimate.com/github/wasilak/elastauth/maintainability)
+[![Docker Repository on Quay](https://quay.io/repository/wasilak/elastauth/status "Docker Repository on Quay")](https://quay.io/repository/wasilak/elastauth) [![CI](https://github.com/wasilak/elastauth/actions/workflows/main.yml/badge.svg)](https://github.com/wasilak/elastauth/actions/workflows/main.yml) [![Maintainability](https://api.codeclimate.com/v1/badges/d75cc6b44c7c33f0b530/maintainability)](https://codeclimate.com/github/wasilak/elastauth/maintainability) [![Go Reference](https://pkg.go.dev/badge/github.com/wasilak/elastauth.svg)](https://pkg.go.dev/github.com/wasilak/elastauth)
 
 <img align="left" src="https://github.com/wasilak/elastauth/blob/main/gopher.png?raw=true" width="40%" height="40%" />
 

@@ -1,9 +1,8 @@
 package logger
 
 import (
-	"io"
-	"log"
 	"os"
+	"strings"
 
 	"github.com/spf13/viper"
 	"golang.org/x/exp/slog"
@@ -19,28 +18,14 @@ func LoggerInit() {
 		AddSource: true,
 	}
 
-	// This code is opening a file specified in the configuration file using the `os.OpenFile` function.
-	// It creates the file if it does not exist, opens it for writing only, and appends to the file if it
-	// already exists. If there is an error opening the file, it logs the error and exits the program.
-	file, err := os.OpenFile(viper.GetString("log_file"), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
-	if err != nil {
-		log.Fatal(err)
-	}
-	mw := io.MultiWriter(os.Stdout, file)
-
-	// This code is creating a `slog.Handler` object based on the value of the `log_format` configuration
-	// option. If the `log_format` is set to `"json"`, it creates a new JSON handler using the
-	// `NewJSONHandler` method of the `opts` object, passing in `mw` (a `io.MultiWriter` that writes to
-	// both `os.Stdout` and a log file) as the output destination. If the `log_format` is not set to
-	// `"json"`, it creates a new text handler using the `NewTextHandler` method of the `opts` object,
-	// again passing in `mw` as the output destination. The resulting `slog.Handler` object is then
-	// assigned to the `handler` variable.
-	var handler slog.Handler
-	if viper.GetString("log_format") == "json" {
-		handler = opts.NewJSONHandler(mw)
+	// This code block is checking the value of the "log_format" configuration setting using the Viper
+	// library. If the value is "json" (case-insensitive), it creates a new logger with a JSON log handler
+	// and sets it as the default logger using the slog library. Otherwise, it creates a new logger with a
+	// text log handler and sets it as the default logger. This allows the user to choose between JSON and
+	// text log formats for their application.
+	if strings.ToLower(viper.GetString("log_format")) == "json" {
+		slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stderr, &opts)))
 	} else {
-		handler = opts.NewTextHandler(mw)
+		slog.SetDefault(slog.New(slog.NewTextHandler(os.Stderr, &opts)))
 	}
-
-	slog.SetDefault(slog.New(handler))
 }

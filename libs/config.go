@@ -13,6 +13,8 @@ import (
 	"github.com/wasilak/elastauth/logger"
 )
 
+// This function initializes the configuration for an application using flags, environment variables,
+// and a YAML configuration file.
 func InitConfiguration() error {
 	flag.Bool("debug", false, "Debug")
 	flag.Bool("generateKey", false, "Generate valid encryption key for use in app")
@@ -60,6 +62,8 @@ func InitConfiguration() error {
 	return nil
 }
 
+// The function generates and sets a secret key if one is not provided or generates and prints a secret
+// key if the "generateKey" flag is set to true.
 func HandleSecretKey() error {
 	if viper.GetBool("generateKey") {
 		key, err := GenerateKey()
@@ -76,7 +80,7 @@ func HandleSecretKey() error {
 			return err
 		}
 		viper.Set("secret_key", key)
-		logger.LoggerInstance.Info("WARNING: No secret key provided. Setting randomly generated", slog.String("key", key))
+		slog.Info("WARNING: No secret key provided. Setting randomly generated", slog.String("key", key))
 	}
 
 	return nil

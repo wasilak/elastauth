@@ -11,6 +11,11 @@ import (
 	"github.com/spf13/viper"
 )
 
+// WebserverInit initializes the webserver and sets up all the routes. It
+// configures the server based on settings from the [viper] configuration
+// library. It also adds support for metrics if enabled with the
+// `enable_metrics` flag. Lastly, it starts the server on the `listen` address
+// specified in the configuration.
 func WebserverInit() {
 	e := echo.New()
 
@@ -22,6 +27,12 @@ func WebserverInit() {
 
 	e.Use(middleware.Logger())
 
+	// This code block is checking if the `enable_metrics` flag is set to true in the configuration file
+	// using the `viper` library. If it is true, it adds middleware to compress the response using Gzip,
+	// but skips compression for requests that contain the word "metrics" in the path. It then creates a
+	// new instance of the Prometheus middleware with the application name "elastauth" and adds it to the
+	// Echo server. This middleware will collect metrics for all HTTP requests and expose them on a
+	// `/metrics` endpoint.
 	if viper.GetBool("enable_metrics") {
 		e.Use(middleware.GzipWithConfig(middleware.GzipConfig{
 			Skipper: func(c echo.Context) bool {

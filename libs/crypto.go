@@ -11,6 +11,9 @@ import (
 	"io"
 )
 
+// Encrypt encrypts a string using AES-GCM algorithm with a given key. The key
+// should be provided as a hexadecimal string. It returns the encrypted string
+// in hexadecimal format.
 func Encrypt(stringToEncrypt string, keyString string) (encryptedString string) {
 
 	//Since the key is in string, we need to convert decode it to bytes
@@ -42,6 +45,9 @@ func Encrypt(stringToEncrypt string, keyString string) (encryptedString string) 
 	return fmt.Sprintf("%x", ciphertext)
 }
 
+// Decrypt decrypts a previously encrypted string using the same key used to
+// encrypt it. It takes in an encrypted string and a key string as parameters
+// and returns the decrypted string. The key must be in hexadecimal format.
 func Decrypt(encryptedString string, keyString string) (decryptedString string) {
 
 	key, _ := hex.DecodeString(keyString)

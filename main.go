@@ -8,6 +8,8 @@ import (
 	"golang.org/x/exp/slog"
 )
 
+// The main function initializes configuration, logger, secret key, cache, and web server for a Go
+// application.
 func main() {
 
 	err := libs.InitConfiguration()
@@ -22,7 +24,7 @@ func main() {
 		panic(err)
 	}
 
-	logger.LoggerInstance.Debug("logger", slog.Any("setings", viper.AllSettings()))
+	slog.Debug("logger", slog.Any("setings", viper.AllSettings()))
 
 	cache.CacheInit()
 

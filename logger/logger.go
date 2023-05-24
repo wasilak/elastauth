@@ -4,26 +4,45 @@ import (
 	"os"
 	"strings"
 
-	"github.com/spf13/viper"
 	"golang.org/x/exp/slog"
 )
 
-var LogLevel *slog.LevelVar
+// The function initializes a logger with a specified log level and format, allowing the user to choose
+// between logging in JSON or text format.
+func LoggerInit(level string, logFormat string) {
 
-// This function initializes a logger with options for log level, log file, and log format.
-func LoggerInit() {
+	// This code block is setting the log level based on the `level` parameter passed to the `LoggerInit`
+	// function. It converts the `level` parameter to uppercase using `strings.ToUpper` and then sets the
+	// `logLevel` variable to the corresponding `slog.Leveler` value based on the string value of `level`.
+	// If `level` is not one of the recognized values ("INFO", "ERROR", "WARN", "DEBUG"), it sets the log
+	// level to `slog.LevelInfo` by default. The `logLevel` variable is then used to set the log level in
+	// the `opts` variable, which is used to configure the logger handler.
+	var logLevel slog.Leveler
+
+	switch strings.ToUpper(level) {
+	case "INFO":
+		logLevel = slog.LevelInfo
+	case "ERROR":
+		logLevel = slog.LevelError
+	case "WARN":
+		logLevel = slog.LevelWarn
+	case "DEBUG":
+		logLevel = slog.LevelDebug
+	default:
+		logLevel = slog.LevelInfo
+	}
 
 	opts := slog.HandlerOptions{
-		Level:     LogLevel,
+		Level:     logLevel,
 		AddSource: true,
 	}
 
-	// This code block is checking the value of the "log_format" configuration setting using the Viper
-	// library. If the value is "json" (case-insensitive), it creates a new logger with a JSON log handler
-	// and sets it as the default logger using the slog library. Otherwise, it creates a new logger with a
-	// text log handler and sets it as the default logger. This allows the user to choose between JSON and
-	// text log formats for their application.
-	if strings.ToLower(viper.GetString("log_format")) == "json" {
+	// This code block is checking if the `logFormat` parameter passed to the `LoggerInit` function is
+	// equal to the string "json" in lowercase. If it is, it creates a new logger with a JSON handler and
+	// sets it as the default logger using `slog.SetDefault`. If it is not equal to "json", it creates a
+	// new logger with a text handler and sets it as the default logger. This allows the user to choose
+	// between logging in JSON format or text format.
+	if strings.ToLower(logFormat) == "json" {
 		slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stderr, &opts)))
 	} else {
 		slog.SetDefault(slog.New(slog.NewTextHandler(os.Stderr, &opts)))

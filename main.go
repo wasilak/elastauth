@@ -17,7 +17,7 @@ func main() {
 		panic(err)
 	}
 
-	logger.LoggerInit()
+	logger.LoggerInit(viper.GetString("log_level"), viper.GetString("log_format"))
 
 	err = libs.HandleSecretKey()
 	if err != nil {

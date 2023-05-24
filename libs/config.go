@@ -10,13 +10,11 @@ import (
 
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
-	"github.com/wasilak/elastauth/logger"
 )
 
 // This function initializes the configuration for an application using flags, environment variables,
 // and a YAML configuration file.
 func InitConfiguration() error {
-	flag.Bool("debug", false, "Debug")
 	flag.Bool("generateKey", false, "Generate valid encryption key for use in app")
 	flag.String("listen", "127.0.0.1:5000", "Listen address")
 	flag.String("config", "./", "Path to config.yml")
@@ -45,18 +43,12 @@ func InitConfiguration() error {
 
 	viper.SetDefault("enable_metrics", false)
 
-	viper.SetDefault("log_file", "./elastauth.log")
+	viper.SetDefault("log_level", "info")
 	viper.SetDefault("log_format", "text")
 
 	err := viper.ReadInConfig()
 	if err != nil {
 		log.Println(err)
-	}
-
-	logger.LogLevel = new(slog.LevelVar)
-
-	if viper.GetBool("debug") {
-		logger.LogLevel.Set(slog.LevelDebug)
 	}
 
 	return nil

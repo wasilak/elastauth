@@ -17,6 +17,10 @@ func main() {
 		panic(err)
 	}
 
+	if viper.GetBool("enableOtel") {
+		libs.InitTracer()
+	}
+
 	logger.LoggerInit(viper.GetString("log_level"), viper.GetString("log_format"))
 
 	err = libs.HandleSecretKey()

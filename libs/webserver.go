@@ -2,6 +2,7 @@ package libs
 
 import (
 	_ "net/http/pprof"
+	"os"
 	"strings"
 
 	"github.com/labstack/echo-contrib/prometheus"
@@ -9,6 +10,7 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 	"github.com/spf13/viper"
+	"go.opentelemetry.io/contrib/instrumentation/github.com/labstack/echo/otelecho"
 )
 
 // WebserverInit initializes the webserver and sets up all the routes. It
@@ -26,6 +28,10 @@ func WebserverInit() {
 	e.Debug = viper.GetBool("debug")
 
 	e.Use(middleware.Logger())
+
+	if viper.GetBool("enableOtel") {
+		e.Use(otelecho.Middleware(os.Getenv("OTEL_SERVICE_NAME")))
+	}
 
 	// This code block is checking if the `enable_metrics` flag is set to true in the configuration file
 	// using the `viper` library. If it is true, it adds middleware to compress the response using Gzip,

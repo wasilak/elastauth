@@ -18,6 +18,7 @@ func InitConfiguration() error {
 	flag.Bool("generateKey", false, "Generate valid encryption key for use in app")
 	flag.String("listen", "127.0.0.1:5000", "Listen address")
 	flag.String("config", "./", "Path to config.yml")
+	flag.Bool("enableOtel", false, "Enable OTEL (OpenTelemetry)")
 
 	pflag.CommandLine.AddGoFlagSet(flag.CommandLine)
 	pflag.Parse()
@@ -42,6 +43,8 @@ func InitConfiguration() error {
 	viper.SetDefault("headers_name", "Remote-Name")
 
 	viper.SetDefault("enable_metrics", false)
+
+	viper.SetDefault("enableOtel", false)
 
 	viper.SetDefault("log_level", "info")
 	viper.SetDefault("log_format", "text")

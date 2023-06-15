@@ -54,9 +54,7 @@ services:
       - 'traefik.enable=true'
       - 'traefik.http.routers.api.rule=Host(`traefik.127-0-0-1.nip.io`)'
       - 'traefik.http.routers.api.entryPoints=http'
-      # - 'traefik.http.routers.api.tls=true'
       - 'traefik.http.routers.api.service=api@internal'
-      # - 'traefik.http.routers.api.middlewares=authelia@docker'
 
   nginx:
     container_name: nginx
@@ -94,13 +92,9 @@ services:
       - 'traefik.http.middlewares.authelia-chain.forwardAuth.trustForwardHeader=true'
       - 'traefik.http.middlewares.authelia-chain.forwardAuth.authResponseHeaders=Remote-User,Remote-Groups,Remote-Name,Remote-Email'
 
-      # - 'traefik.http.middlewares.kibana-auth-proxy.forwardauth.address=https://kibana-auth-proxy.127-0-0-1.nip.io:4334'
       - 'traefik.http.middlewares.kibana-auth-proxy.forwardauth.address=http://kibana-auth-proxy:3000/'
       - 'traefik.http.middlewares.kibana-auth-proxy.forwardAuth.trustForwardHeader=true'
       - 'traefik.http.middlewares.authelia-chain.forwardAuth.authResponseHeaders=Remote-User,Remote-Groups,Remote-Name,Remote-Email,Authorization'
-      # - 'traefik.http.middlewares.authelia-basic.forwardAuth.address=http://authelia:9091/api/verify?auth=basic'
-      # - 'traefik.http.middlewares.authelia-basic.forwardAuth.trustForwardHeader=true'
-      # - 'traefik.http.middlewares.authelia-basic.forwardAuth.authResponseHeaders=Remote-User,Remote-Groups,Remote-Name,Remote-Email'
 
       - 'traefik.http.middlewares.auth-combined.chain.middlewares=authelia-chain,kibana-auth-proxy'
     depends_on:
@@ -120,5 +114,4 @@ services:
       - 'traefik.http.routers.go-hello-world.rule=Host(`go-hello-world.127-0-0-1.nip.io`)'
       - 'traefik.http.routers.go-hello-world.entryPoints=https'
       - 'traefik.http.routers.go-hello-world.tls=true'
-      # - 'traefik.http.routers.go-hello-world.middlewares=authelia@docker'
       - 'traefik.http.routers.go-hello-world.middlewares=auth-combined@docker'

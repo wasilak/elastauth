@@ -4,6 +4,8 @@ Docker compose based example, couple of assumpions:
 
 - you have a Elasticsearch cluster with Authentication & Authorization already enabled and working
 - it was tested using podman, but should work with regular docker
+- kibana is not part of example as well, which means that you won't be redirected to it automatically, so you need to check manually in Elasticsearch/kibana if user was created
+- in production replace `hello-world` service with kibana
 
 Testing:
 

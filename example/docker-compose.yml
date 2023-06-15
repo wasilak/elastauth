@@ -11,7 +11,7 @@ services:
     ports:
       - "8083:3000"
     volumes:
-      - "./config.yml:/app/config.yml"
+      - "${PWD}/config.yml:/app/config.yml"
     depends_on:
       - traefik
       - authelia
@@ -57,6 +57,19 @@ services:
       # - 'traefik.http.routers.api.tls=true'
       - 'traefik.http.routers.api.service=api@internal'
       # - 'traefik.http.routers.api.middlewares=authelia@docker'
+
+  nginx:
+    container_name: nginx
+    image: lscr.io/linuxserver/nginx
+    restart: unless-stopped
+    ports:
+      - '8090:80'
+      - '4444:443'
+    volumes:
+      - ${PWD}/data/nginx/snippets:/config/nginx/snippets:rw
+      - ${PWD}/data/nginx/site-confs:/config/nginx/site-confs:rw
+    environment:
+      DOCKER_MODS: 'linuxserver/mods:nginx-proxy-confs'
 
   authelia:
     container_name: authelia

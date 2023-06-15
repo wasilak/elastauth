@@ -1,0 +1,22 @@
+listen: :3000
+
+elasticsearch_host:
+elasticsearch_username:
+elasticsearch_password:
+
+cache_type: memory
+
+debug: true
+
+extend_cache: true
+
+secret_key: 661451132ad722f74ad2beee888d3d8ac093a2993a20dff9fc3f2c9d50b00060
+
+default_roles:
+  - custom_viewer
+
+group_mappings:
+  ad_group_one:
+    - elastic_role_one
+  ad_group_two:
+    - elastic_role_two

@@ -1,16 +1,20 @@
 package libs
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"log"
 	"os"
 
+	"go.opentelemetry.io/otel"
 	"golang.org/x/exp/slog"
 
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 )
+
+var tracerConfig = otel.Tracer("config")
 
 // This function initializes the configuration for an application using flags, environment variables,
 // and a YAML configuration file.
@@ -59,9 +63,12 @@ func InitConfiguration() error {
 
 // The function generates and sets a secret key if one is not provided or generates and prints a secret
 // key if the "generateKey" flag is set to true.
-func HandleSecretKey() error {
+func HandleSecretKey(ctx context.Context) error {
+	_, span := tracerConfig.Start(ctx, "HandleSecretKey")
+	defer span.End()
+
 	if viper.GetBool("generateKey") {
-		key, err := GenerateKey()
+		key, err := GenerateKey(ctx)
 		if err != nil {
 			panic(err)
 		}
@@ -70,12 +77,12 @@ func HandleSecretKey() error {
 	}
 
 	if len(viper.GetString("secret_key")) == 0 {
-		key, err := GenerateKey()
+		key, err := GenerateKey(ctx)
 		if err != nil {
 			return err
 		}
 		viper.Set("secret_key", key)
-		slog.Info("WARNING: No secret key provided. Setting randomly generated", slog.String("key", key))
+		slog.InfoCtx(ctx, "WARNING: No secret key provided. Setting randomly generated", slog.String("key", key))
 	}
 
 	return nil

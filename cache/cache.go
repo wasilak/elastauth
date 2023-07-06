@@ -1,10 +1,12 @@
 package cache
 
 import (
+	"context"
 	"log"
 	"time"
 
 	"github.com/spf13/viper"
+	"go.opentelemetry.io/otel"
 )
 
 // The CacheInterface defines methods for initializing, getting, setting, and extending the
@@ -28,12 +30,12 @@ import (
 // time-to-live (TTL) of a cached item. This means that you can update the expiration time of a cached
 // item to keep it in the cache for a longer period of time. This can be useful if you
 type CacheInterface interface {
-	Init(cacheDuration time.Duration)
-	Get(cacheKey string) (interface{}, bool)
-	Set(cacheKey string, item interface{})
-	GetItemTTL(cacheKey string) (time.Duration, bool)
-	GetTTL() time.Duration
-	ExtendTTL(cacheKey string, item interface{})
+	Init(ctx context.Context, cacheDuration time.Duration)
+	Get(ctx context.Context, cacheKey string) (interface{}, bool)
+	Set(ctx context.Context, cacheKey string, item interface{})
+	GetItemTTL(ctx context.Context, cacheKey string) (time.Duration, bool)
+	GetTTL(ctx context.Context) time.Duration
+	ExtendTTL(ctx context.Context, cacheKey string, item interface{})
 }
 
 // `var CacheInstance CacheInterface` is declaring a variable named `CacheInstance` of type
@@ -43,7 +45,11 @@ var CacheInstance CacheInterface
 
 // The function initializes a cache instance based on the cache type specified in the configuration
 // file.
-func CacheInit() {
+func CacheInit(ctx context.Context) {
+	tracer := otel.Tracer("Cache")
+	_, span := tracer.Start(ctx, "CacheInit")
+	defer span.End()
+
 	cacheDuration, err := time.ParseDuration(viper.GetString("cache_expire"))
 	if err != nil {
 		log.Fatal(err)
@@ -54,14 +60,16 @@ func CacheInit() {
 			Address: viper.GetString("redis_host"),
 			DB:      viper.GetInt("redis_db"),
 			TTL:     cacheDuration,
+			Tracer:  otel.Tracer("RedisCache"),
 		}
 	} else if viper.GetString("cache_type") == "memory" {
 		CacheInstance = &GoCache{
-			TTL: cacheDuration,
+			TTL:    cacheDuration,
+			Tracer: otel.Tracer("GoCache"),
 		}
 	} else {
 		log.Fatal("No cache_type selected or cache type is invalid")
 	}
 
-	CacheInstance.Init(cacheDuration)
+	CacheInstance.Init(ctx, cacheDuration)
 }

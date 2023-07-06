@@ -8,3 +8,5 @@ headers:
   groups: Remote-Groups
   email: Remote-Email
   name: Remote-Name
+log_level: info
+log_format: json

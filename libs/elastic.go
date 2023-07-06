@@ -2,12 +2,16 @@ package libs
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
 
+	"go.opentelemetry.io/otel"
 	"golang.org/x/exp/slog"
 )
+
+var tracerElastic = otel.Tracer("elastic")
 
 // `var client *http.Client` is declaring a variable named `client` of type `*http.Client`. The `*`
 // before `http.Client` indicates that `client` is a pointer to an instance of the `http.Client`
@@ -77,7 +81,10 @@ var elasticsearchConnectionDetails ElasticsearchConnectionDetails
 
 // The function initializes an Elasticsearch client with connection details and sends a GET request to
 // the Elasticsearch URL with basic authentication.
-func initElasticClient(url, user, pass string) error {
+func initElasticClient(ctx context.Context, url, user, pass string) error {
+	_, span := tracerElastic.Start(ctx, "initElasticClient")
+	defer span.End()
+
 	client = &http.Client{}
 
 	elasticsearchConnectionDetails = ElasticsearchConnectionDetails{
@@ -103,14 +110,17 @@ func initElasticClient(url, user, pass string) error {
 
 	json.NewDecoder(resp.Body).Decode(&body)
 
-	slog.Debug("Request response", slog.Any("body", body))
+	slog.DebugCtx(ctx, "Request response", slog.Any("body", body))
 
 	return nil
 }
 
 // The function UpsertUser sends a POST request to Elasticsearch to create or update a user with the
 // given username and user details.
-func UpsertUser(username string, elasticsearchUser ElasticsearchUser) error {
+func UpsertUser(ctx context.Context, username string, elasticsearchUser ElasticsearchUser) error {
+	_, span := tracerElastic.Start(ctx, "UpsertUser")
+	defer span.End()
+
 	client = &http.Client{}
 
 	url := fmt.Sprintf("%s/_security/user/%s", elasticsearchConnectionDetails.URL, username)
@@ -139,7 +149,7 @@ func UpsertUser(username string, elasticsearchUser ElasticsearchUser) error {
 
 	json.NewDecoder(resp.Body).Decode(&body)
 
-	slog.Debug("Request response", slog.Any("body", body))
+	slog.DebugCtx(ctx, "Request response", slog.Any("body", body))
 
 	return nil
 }

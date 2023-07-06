@@ -1,6 +1,7 @@
 package libs
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/hex"
@@ -8,7 +9,10 @@ import (
 
 	"github.com/sethvargo/go-password/password"
 	"github.com/spf13/viper"
+	"go.opentelemetry.io/otel"
 )
+
+var tracerUtils = otel.Tracer("utils")
 
 // The function checks if a given string is present in a slice of strings, ignoring case sensitivity.
 func contains(s []string, str string) bool {
@@ -33,7 +37,9 @@ func getMapKeys(itemsMap map[string][]string) []string {
 
 // The function generates a temporary user password that is 32 characters long with a mix of digits,
 // symbols, and upper/lower case letters, disallowing repeat characters.
-func GenerateTemporaryUserPassword() (string, error) {
+func GenerateTemporaryUserPassword(ctx context.Context) (string, error) {
+	_, span := tracerUtils.Start(ctx, "GenerateTemporaryUserPassword")
+	defer span.End()
 
 	// `res, err := password.Generate(32, 10, 0, false, false)` is generating a temporary user password
 	// that is 32 characters long with a mix of digits, symbols, and upper/lower case letters, disallowing
@@ -48,7 +54,9 @@ func GenerateTemporaryUserPassword() (string, error) {
 
 // The function retrieves user roles based on their group mappings or default roles if no mappings are
 // found.
-func GetUserRoles(userGroups []string) []string {
+func GetUserRoles(ctx context.Context, userGroups []string) []string {
+	_, span := tracerUtils.Start(ctx, "GetUserRoles")
+	defer span.End()
 
 	// This code block is retrieving user roles based on their group mappings or default roles if no
 	// mappings are found.
@@ -77,7 +85,10 @@ func basicAuth(username, pass string) string {
 
 // The function generates a random 32 byte key for AES-256 encryption and returns it as a hexadecimal
 // encoded string.
-func GenerateKey() (string, error) {
+func GenerateKey(ctx context.Context) (string, error) {
+	_, span := tracerUtils.Start(ctx, "GenerateKey")
+	defer span.End()
+
 	bytes := make([]byte, 32) //generate a random 32 byte key for AES-256
 	if _, err := rand.Read(bytes); err != nil {
 		return "", err

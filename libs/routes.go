@@ -9,6 +9,7 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/spf13/viper"
 	"github.com/wasilak/elastauth/cache"
+	"go.opentelemetry.io/otel"
 	"golang.org/x/exp/slog"
 )
 
@@ -49,51 +50,58 @@ type configResponse struct {
 // This function handles the main route of a web application, authenticating users and caching their
 // encrypted passwords.
 func MainRoute(c echo.Context) error {
+	tracer := otel.Tracer("MainRoute")
+
 	headerName := viper.GetString("headers_username")
 	user := c.Request().Header.Get(headerName)
 
+	ctx, spanError := tracer.Start(c.Request().Context(), "header error")
 	if len(user) == 0 {
 		errorMessage := "Header not provided: " + headerName
-		slog.Error(errorMessage)
+		slog.ErrorCtx(ctx, errorMessage)
 		response := ErrorResponse{
 			Message: errorMessage,
 			Code:    http.StatusBadRequest,
 		}
 		return c.JSON(http.StatusBadRequest, response)
 	}
+	spanError.End()
 
 	headerName = viper.GetString("headers_groups")
 	userGroups := strings.Split(c.Request().Header.Get(headerName), ",")
 
 	if len(userGroups) == 0 {
 		errorMessage := "Header not provided: " + headerName
-		slog.Error(errorMessage)
+		slog.ErrorCtx(ctx, errorMessage)
 	}
 
+	ctx, spanCacheGet := tracer.Start(ctx, "cache get")
 	cacheKey := "elastauth-" + user
 
 	key := viper.GetString("secret_key")
 
-	encryptedPasswordBase64, exists := cache.CacheInstance.Get(cacheKey)
+	encryptedPasswordBase64, exists := cache.CacheInstance.Get(ctx, cacheKey)
 
 	if exists {
-		slog.Debug("Cache hit", slog.String("cacheKey", cacheKey))
+		slog.DebugCtx(ctx, "Cache hit", slog.String("cacheKey", cacheKey))
 	} else {
-		slog.Debug("Cache miss", slog.String("cacheKey", cacheKey))
+		slog.DebugCtx(ctx, "Cache miss", slog.String("cacheKey", cacheKey))
 	}
+	spanCacheGet.End()
 
 	if !exists {
-		roles := GetUserRoles(userGroups)
+		ctx, spanCacheMiss := tracer.Start(ctx, "cache miss")
+		roles := GetUserRoles(ctx, userGroups)
 
 		userEmail := c.Request().Header.Get(viper.GetString("headers_email"))
 		userName := c.Request().Header.Get(viper.GetString("headers_name"))
 
-		password, err := GenerateTemporaryUserPassword()
+		password, err := GenerateTemporaryUserPassword(ctx)
 		if err != nil {
-			slog.Error("Error", slog.Any("message", err))
+			slog.ErrorCtx(ctx, "Error", slog.Any("message", err))
 			return c.JSON(http.StatusInternalServerError, err)
 		}
-		encryptedPassword := Encrypt(password, key)
+		encryptedPassword := Encrypt(ctx, password, key)
 		encryptedPasswordBase64 = string(base64.URLEncoding.EncodeToString([]byte(encryptedPassword)))
 
 		elasticsearchUserMetadata := ElasticsearchUserMetadata{
@@ -111,35 +119,37 @@ func MainRoute(c echo.Context) error {
 
 		if !viper.GetBool("elasticsearch_dry_run") {
 			err := initElasticClient(
+				ctx,
 				viper.GetString("elasticsearch_host"),
 				viper.GetString("elasticsearch_username"),
 				viper.GetString("elasticsearch_password"),
 			)
 			if err != nil {
-				slog.Error("Error", slog.Any("message", err))
+				slog.ErrorCtx(ctx, "Error", slog.Any("message", err))
 				return c.JSON(http.StatusInternalServerError, err)
 			}
 
-			err = UpsertUser(user, elasticsearchUser)
+			err = UpsertUser(ctx, user, elasticsearchUser)
 			if err != nil {
-				slog.Error("Error", slog.Any("message", err))
+				slog.ErrorCtx(ctx, "Error", slog.Any("message", err))
 				return c.JSON(http.StatusInternalServerError, err)
 			}
 		}
 
-		cache.CacheInstance.Set(cacheKey, encryptedPasswordBase64)
+		cache.CacheInstance.Set(ctx, cacheKey, encryptedPasswordBase64)
+		spanCacheMiss.End()
 	}
 
-	itemCacheDuration, _ := cache.CacheInstance.GetItemTTL(cacheKey)
+	itemCacheDuration, _ := cache.CacheInstance.GetItemTTL(ctx, cacheKey)
 
-	if viper.GetBool("extend_cache") && itemCacheDuration > 0 && itemCacheDuration < cache.CacheInstance.GetTTL() {
-		slog.Debug(fmt.Sprintf("User %s: extending cache TTL (from %s to %s)", user, itemCacheDuration, viper.GetString("cache_expire")))
-		cache.CacheInstance.ExtendTTL(cacheKey, encryptedPasswordBase64)
+	if viper.GetBool("extend_cache") && itemCacheDuration > 0 && itemCacheDuration < cache.CacheInstance.GetTTL(ctx) {
+		slog.DebugCtx(ctx, fmt.Sprintf("User %s: extending cache TTL (from %s to %s)", user, itemCacheDuration, viper.GetString("cache_expire")))
+		cache.CacheInstance.ExtendTTL(ctx, cacheKey, encryptedPasswordBase64)
 	}
 
 	decryptedPasswordBase64, _ := base64.URLEncoding.DecodeString(encryptedPasswordBase64.(string))
 
-	decryptedPassword := Decrypt(string(decryptedPasswordBase64), key)
+	decryptedPassword := Decrypt(ctx, string(decryptedPasswordBase64), key)
 
 	c.Response().Header().Set(echo.HeaderAuthorization, "Basic "+basicAuth(user, decryptedPassword))
 
@@ -148,6 +158,10 @@ func MainRoute(c echo.Context) error {
 
 // The function returns a JSON response with a "OK" status for a health route in a Go application.
 func HealthRoute(c echo.Context) error {
+	tracer := otel.Tracer("HealthRoute")
+	_, span := tracer.Start(c.Request().Context(), "response")
+	defer span.End()
+
 	response := HealthResponse{
 		Status: "OK",
 	}
@@ -158,6 +172,10 @@ func HealthRoute(c echo.Context) error {
 // The function returns a JSON response containing default roles and group mappings from a
 // configuration file.
 func ConfigRoute(c echo.Context) error {
+	tracer := otel.Tracer("ConfigRoute")
+	_, span := tracer.Start(c.Request().Context(), "response")
+	defer span.End()
+
 	response := configResponse{
 		DefaultRoles:  viper.GetStringSlice("default_roles"),
 		GroupMappings: viper.GetStringMapStringSlice("group_mappings"),

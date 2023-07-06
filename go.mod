@@ -11,13 +11,11 @@ require (
 	github.com/spf13/pflag v1.0.5
 	github.com/spf13/viper v1.15.0
 	github.com/stretchr/testify v1.8.3
+	github.com/wasilak/otelgo v0.0.2
 	go.opentelemetry.io/contrib/instrumentation/github.com/labstack/echo/otelecho v0.42.0
 	go.opentelemetry.io/otel v1.16.0
-	go.opentelemetry.io/otel/exporters/otlp/otlptrace v1.16.0
-	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.16.0
-	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp v1.16.0
-	go.opentelemetry.io/otel/sdk v1.16.0
-	golang.org/x/exp v0.0.0-20230522175609-2e198f4a06a1
+	go.opentelemetry.io/otel/trace v1.16.0
+	golang.org/x/exp v0.0.0-20230626212559-97b1e661b5df
 )
 
 require (
@@ -55,8 +53,11 @@ require (
 	github.com/valyala/bytebufferpool v1.0.0 // indirect
 	github.com/valyala/fasttemplate v1.2.2 // indirect
 	go.opentelemetry.io/otel/exporters/otlp/internal/retry v1.16.0 // indirect
+	go.opentelemetry.io/otel/exporters/otlp/otlptrace v1.16.0 // indirect
+	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.16.0 // indirect
+	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp v1.16.0 // indirect
 	go.opentelemetry.io/otel/metric v1.16.0 // indirect
-	go.opentelemetry.io/otel/trace v1.16.0 // indirect
+	go.opentelemetry.io/otel/sdk v1.16.0 // indirect
 	go.opentelemetry.io/proto/otlp v0.19.0 // indirect
 	golang.org/x/crypto v0.6.0 // indirect
 	golang.org/x/net v0.10.0 // indirect

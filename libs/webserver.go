@@ -1,6 +1,7 @@
 package libs
 
 import (
+	"context"
 	_ "net/http/pprof"
 	"os"
 	"strings"
@@ -11,14 +12,20 @@ import (
 	"github.com/labstack/echo/v4/middleware"
 	"github.com/spf13/viper"
 	"go.opentelemetry.io/contrib/instrumentation/github.com/labstack/echo/otelecho"
+	"go.opentelemetry.io/otel"
 )
+
+var tracerWebserver = otel.Tracer("webserver")
 
 // WebserverInit initializes the webserver and sets up all the routes. It
 // configures the server based on settings from the [viper] configuration
 // library. It also adds support for metrics if enabled with the
 // `enable_metrics` flag. Lastly, it starts the server on the `listen` address
 // specified in the configuration.
-func WebserverInit() {
+func WebserverInit(ctx context.Context) {
+	_, span := tracerWebserver.Start(ctx, "WebserverInit")
+	defer span.End()
+
 	e := echo.New()
 
 	e.HideBanner = true

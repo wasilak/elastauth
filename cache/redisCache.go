@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/go-redis/redis/v8"
+	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/exp/slog"
 )
 
@@ -29,9 +30,9 @@ import (
 type RedisCache struct {
 	Cache   *redis.Client
 	TTL     time.Duration
-	CTX     context.Context
 	Address string
 	DB      int
+	Tracer  trace.Tracer
 }
 
 // `func (c *RedisCache) Init(cacheDuration time.Duration)` is a method of the `RedisCache` struct that
@@ -41,13 +42,14 @@ type RedisCache struct {
 // the `redis.NewClient` function and sets the `Cache` property of the `RedisCache` instance to the new
 // client instance. It also sets the `CTX` property to a new `context.Background()` instance. Finally,
 // it sets the `TTL` property of the `RedisCache` instance to the `cacheDuration` parameter.
-func (c *RedisCache) Init(cacheDuration time.Duration) {
+func (c *RedisCache) Init(ctx context.Context, cacheDuration time.Duration) {
+	_, span := c.Tracer.Start(ctx, "Init")
+	defer span.End()
+
 	c.Cache = redis.NewClient(&redis.Options{
 		Addr: c.Address,
 		DB:   c.DB,
 	})
-
-	c.CTX = context.Background()
 
 	c.TTL = cacheDuration
 }
@@ -56,7 +58,10 @@ func (c *RedisCache) Init(cacheDuration time.Duration) {
 // the `TTL` property of the `RedisCache` instance, which represents the duration of time that cached
 // items will be stored in the cache before they are considered expired and need to be refreshed or
 // removed. The method returns a `time.Duration` value.
-func (c *RedisCache) GetTTL() time.Duration {
+func (c *RedisCache) GetTTL(ctx context.Context) time.Duration {
+	_, span := c.Tracer.Start(ctx, "GetTTL")
+	defer span.End()
+
 	return c.TTL
 }
 
@@ -65,11 +70,14 @@ func (c *RedisCache) GetTTL() time.Duration {
 // a tuple containing the cached item as an `interface{}` and a boolean value indicating whether the
 // item was successfully retrieved from the cache or not. If the item is not found in the cache or an
 // error occurs during retrieval, the method returns an empty `interface{}` and `false`.
-func (c *RedisCache) Get(cacheKey string) (interface{}, bool) {
-	item, err := c.Cache.Get(c.CTX, cacheKey).Result()
+func (c *RedisCache) Get(ctx context.Context, cacheKey string) (interface{}, bool) {
+	_, span := c.Tracer.Start(ctx, "Get")
+	defer span.End()
+
+	item, err := c.Cache.Get(ctx, cacheKey).Result()
 
 	if err != nil || len(item) == 0 {
-		slog.Error("Error", slog.Any("message", err))
+		slog.ErrorCtx(ctx, "Error", slog.Any("message", err))
 		return item, false
 	}
 
@@ -83,8 +91,11 @@ func (c *RedisCache) Get(cacheKey string) (interface{}, bool) {
 // `Set` function of the Redis client to set the value in the cache with the specified key and TTL
 // (time-to-live) duration. If an error occurs during the set operation, it is logged using the
 // `slog.Error` function.
-func (c *RedisCache) Set(cacheKey string, item interface{}) {
-	c.Cache.Set(c.CTX, cacheKey, item, c.TTL).Err()
+func (c *RedisCache) Set(ctx context.Context, cacheKey string, item interface{}) {
+	_, span := c.Tracer.Start(ctx, "Set")
+	defer span.End()
+
+	c.Cache.Set(ctx, cacheKey, item, c.TTL).Err()
 }
 
 // `func (c *RedisCache) GetItemTTL(cacheKey string) (time.Duration, bool)` is a method of the
@@ -93,11 +104,14 @@ func (c *RedisCache) Set(cacheKey string, item interface{}) {
 // a boolean value indicating whether the TTL was successfully retrieved from the cache or not. If the
 // TTL is not found in the cache or an error occurs during retrieval, the method returns a zero
 // `time.Duration` value and `false`.
-func (c *RedisCache) GetItemTTL(cacheKey string) (time.Duration, bool) {
-	item, err := c.Cache.TTL(c.CTX, cacheKey).Result()
+func (c *RedisCache) GetItemTTL(ctx context.Context, cacheKey string) (time.Duration, bool) {
+	_, span := c.Tracer.Start(ctx, "GetItemTTL")
+	defer span.End()
+
+	item, err := c.Cache.TTL(ctx, cacheKey).Result()
 
 	if err != nil {
-		slog.Error("Error", slog.Any("message", err))
+		slog.ErrorCtx(ctx, "Error", slog.Any("message", err))
 		return item, false
 	}
 
@@ -109,6 +123,9 @@ func (c *RedisCache) GetItemTTL(cacheKey string) (time.Duration, bool) {
 // It uses the `Expire` function of the Redis client to set the TTL duration of the cached item to the
 // value of the `TTL` property of the `RedisCache` instance. This method is useful for refreshing the
 // TTL of a cached item to prevent it from expiring prematurely.
-func (c *RedisCache) ExtendTTL(cacheKey string, item interface{}) {
-	c.Cache.Expire(c.CTX, cacheKey, c.TTL)
+func (c *RedisCache) ExtendTTL(ctx context.Context, cacheKey string, item interface{}) {
+	_, span := c.Tracer.Start(ctx, "ExtendTTL")
+	defer span.End()
+
+	c.Cache.Expire(ctx, cacheKey, c.TTL)
 }

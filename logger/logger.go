@@ -4,6 +4,7 @@ import (
 	"os"
 	"strings"
 
+	otelgoslog "github.com/wasilak/otelgo/slog"
 	"golang.org/x/exp/slog"
 )
 
@@ -43,8 +44,8 @@ func LoggerInit(level string, logFormat string) {
 	// new logger with a text handler and sets it as the default logger. This allows the user to choose
 	// between logging in JSON format or text format.
 	if strings.ToLower(logFormat) == "json" {
-		slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stderr, &opts)))
+		slog.SetDefault(slog.New(otelgoslog.NewTracingHandler(slog.NewJSONHandler(os.Stderr, &opts))))
 	} else {
-		slog.SetDefault(slog.New(slog.NewTextHandler(os.Stderr, &opts)))
+		slog.SetDefault(slog.New(otelgoslog.NewTracingHandler(slog.NewTextHandler(os.Stderr, &opts))))
 	}
 }

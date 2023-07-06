@@ -3,18 +3,25 @@ package libs
 // courtesy of https://www.melvinvivas.com/how-to-encrypt-and-decrypt-data-using-aes
 
 import (
+	"context"
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
 	"io"
+
+	"go.opentelemetry.io/otel"
 )
+
+var tracerCrypto = otel.Tracer("crypto")
 
 // Encrypt encrypts a string using AES-GCM algorithm with a given key. The key
 // should be provided as a hexadecimal string. It returns the encrypted string
 // in hexadecimal format.
-func Encrypt(stringToEncrypt string, keyString string) (encryptedString string) {
+func Encrypt(ctx context.Context, stringToEncrypt string, keyString string) (encryptedString string) {
+	_, span := tracerCrypto.Start(ctx, "Encrypt")
+	defer span.End()
 
 	//Since the key is in string, we need to convert decode it to bytes
 	key, _ := hex.DecodeString(keyString)
@@ -48,7 +55,9 @@ func Encrypt(stringToEncrypt string, keyString string) (encryptedString string) 
 // Decrypt decrypts a previously encrypted string using the same key used to
 // encrypt it. It takes in an encrypted string and a key string as parameters
 // and returns the decrypted string. The key must be in hexadecimal format.
-func Decrypt(encryptedString string, keyString string) (decryptedString string) {
+func Decrypt(ctx context.Context, encryptedString string, keyString string) (decryptedString string) {
+	_, span := tracerCrypto.Start(ctx, "Decrypt")
+	defer span.End()
 
 	key, _ := hex.DecodeString(keyString)
 	enc, _ := hex.DecodeString(encryptedString)

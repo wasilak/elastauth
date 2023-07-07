@@ -2,6 +2,7 @@ package libs
 
 import (
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -10,6 +11,8 @@ import (
 	"github.com/spf13/viper"
 	"github.com/wasilak/elastauth/cache"
 	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
 	"golang.org/x/exp/slog"
 )
 
@@ -52,20 +55,24 @@ type configResponse struct {
 func MainRoute(c echo.Context) error {
 	tracer := otel.Tracer("MainRoute")
 
+	ctx, spanHeader := tracer.Start(c.Request().Context(), "Getting user information from request")
+
+	spanHeader.AddEvent("Getting username from header")
 	headerName := viper.GetString("headers_username")
 	user := c.Request().Header.Get(headerName)
 
-	ctx, spanError := tracer.Start(c.Request().Context(), "header error")
 	if len(user) == 0 {
-		errorMessage := "Header not provided: " + headerName
-		slog.ErrorCtx(ctx, errorMessage)
+		err := errors.New("Header not provided: " + headerName)
+		slog.ErrorCtx(ctx, err.Error())
+		spanHeader.RecordError(err)
+		spanHeader.SetStatus(codes.Error, err.Error())
 		response := ErrorResponse{
-			Message: errorMessage,
+			Message: err.Error(),
 			Code:    http.StatusBadRequest,
 		}
 		return c.JSON(http.StatusBadRequest, response)
 	}
-	spanError.End()
+	spanHeader.End()
 
 	headerName = viper.GetString("headers_groups")
 	userGroups := strings.Split(c.Request().Header.Get(headerName), ",")
@@ -77,9 +84,12 @@ func MainRoute(c echo.Context) error {
 
 	ctx, spanCacheGet := tracer.Start(ctx, "cache get")
 	cacheKey := "elastauth-" + user
+	spanCacheGet.SetAttributes(attribute.String("user", user))
+	spanCacheGet.SetAttributes(attribute.String("cacheKey", cacheKey))
 
 	key := viper.GetString("secret_key")
 
+	spanCacheGet.AddEvent("Getting password from cache")
 	encryptedPasswordBase64, exists := cache.CacheInstance.Get(ctx, cacheKey)
 
 	if exists {
@@ -90,17 +100,23 @@ func MainRoute(c echo.Context) error {
 	spanCacheGet.End()
 
 	if !exists {
-		ctx, spanCacheMiss := tracer.Start(ctx, "cache miss")
+		ctx, spanCacheMiss := tracer.Start(ctx, "user access regeneration")
+
 		roles := GetUserRoles(ctx, userGroups)
 
 		userEmail := c.Request().Header.Get(viper.GetString("headers_email"))
 		userName := c.Request().Header.Get(viper.GetString("headers_name"))
+		spanCacheMiss.SetAttributes(attribute.String("userEmail", userEmail))
+		spanCacheMiss.SetAttributes(attribute.String("userName", userName))
 
+		spanCacheMiss.AddEvent("Generating temporary user password")
 		password, err := GenerateTemporaryUserPassword(ctx)
 		if err != nil {
 			slog.ErrorCtx(ctx, "Error", slog.Any("message", err))
 			return c.JSON(http.StatusInternalServerError, err)
 		}
+
+		spanCacheMiss.AddEvent("Encrypting temporary user password")
 		encryptedPassword := Encrypt(ctx, password, key)
 		encryptedPasswordBase64 = string(base64.URLEncoding.EncodeToString([]byte(encryptedPassword)))
 
@@ -129,6 +145,7 @@ func MainRoute(c echo.Context) error {
 				return c.JSON(http.StatusInternalServerError, err)
 			}
 
+			spanCacheMiss.AddEvent("Upserting user in Elasticsearch")
 			err = UpsertUser(ctx, user, elasticsearchUser)
 			if err != nil {
 				slog.ErrorCtx(ctx, "Error", slog.Any("message", err))
@@ -136,9 +153,13 @@ func MainRoute(c echo.Context) error {
 			}
 		}
 
+		spanCacheMiss.AddEvent("Setting cache item")
 		cache.CacheInstance.Set(ctx, cacheKey, encryptedPasswordBase64)
 		spanCacheMiss.End()
 	}
+
+	ctx, spanItemCache := tracer.Start(ctx, "handling item cache")
+	spanItemCache.SetAttributes(attribute.String("cacheKey", cacheKey))
 
 	itemCacheDuration, _ := cache.CacheInstance.GetItemTTL(ctx, cacheKey)
 
@@ -146,10 +167,15 @@ func MainRoute(c echo.Context) error {
 		slog.DebugCtx(ctx, fmt.Sprintf("User %s: extending cache TTL (from %s to %s)", user, itemCacheDuration, viper.GetString("cache_expire")))
 		cache.CacheInstance.ExtendTTL(ctx, cacheKey, encryptedPasswordBase64)
 	}
+	spanItemCache.End()
+
+	ctx, spanDecrypt := tracer.Start(ctx, "password decryption")
+	spanDecrypt.AddEvent("Decrypting password")
 
 	decryptedPasswordBase64, _ := base64.URLEncoding.DecodeString(encryptedPasswordBase64.(string))
 
 	decryptedPassword := Decrypt(ctx, string(decryptedPasswordBase64), key)
+	spanDecrypt.End()
 
 	c.Response().Header().Set(echo.HeaderAuthorization, "Basic "+basicAuth(user, decryptedPassword))
 

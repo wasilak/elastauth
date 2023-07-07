@@ -23,7 +23,7 @@ func main() {
 	}
 
 	if viper.GetBool("enableOtel") {
-		otelgotracer.InitTracer(ctx)
+		otelgotracer.InitTracer(ctx, true)
 	}
 
 	logger.LoggerInit(viper.GetString("log_level"), viper.GetString("log_format"))

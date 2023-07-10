@@ -6,9 +6,10 @@ import (
 	"github.com/spf13/viper"
 	"github.com/wasilak/elastauth/cache"
 	"github.com/wasilak/elastauth/libs"
-	"github.com/wasilak/elastauth/logger"
 	otelgotracer "github.com/wasilak/otelgo/tracing"
 	"golang.org/x/exp/slog"
+
+	"github.com/wasilak/loggergo"
 )
 
 // The main function initializes configuration, logger, secret key, cache, and web server for a Go
@@ -26,7 +27,7 @@ func main() {
 		otelgotracer.InitTracer(ctx, true)
 	}
 
-	logger.LoggerInit(viper.GetString("log_level"), viper.GetString("log_format"))
+	loggergo.LoggerInit(viper.GetString("log_level"), viper.GetString("log_format"))
 
 	err = libs.HandleSecretKey(ctx)
 	if err != nil {

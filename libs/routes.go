@@ -117,7 +117,12 @@ func MainRoute(c echo.Context) error {
 		}
 
 		spanCacheMiss.AddEvent("Encrypting temporary user password")
-		encryptedPassword := Encrypt(ctx, password, key)
+		encryptedPassword, err := Encrypt(ctx, password, key)
+		if err != nil {
+			slog.ErrorCtx(ctx, "Error", slog.Any("message", err))
+			return c.JSON(http.StatusInternalServerError, err)
+		}
+
 		encryptedPasswordBase64 = string(base64.URLEncoding.EncodeToString([]byte(encryptedPassword)))
 
 		elasticsearchUserMetadata := ElasticsearchUserMetadata{
@@ -174,7 +179,12 @@ func MainRoute(c echo.Context) error {
 
 	decryptedPasswordBase64, _ := base64.URLEncoding.DecodeString(encryptedPasswordBase64.(string))
 
-	decryptedPassword := Decrypt(ctx, string(decryptedPasswordBase64), key)
+	decryptedPassword, err := Decrypt(ctx, string(decryptedPasswordBase64), key)
+	if err != nil {
+		slog.ErrorCtx(ctx, "Error", slog.Any("message", err))
+		return c.JSON(http.StatusInternalServerError, err)
+	}
+
 	spanDecrypt.End()
 
 	c.Response().Header().Set(echo.HeaderAuthorization, "Basic "+basicAuth(user, decryptedPassword))

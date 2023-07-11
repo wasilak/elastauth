@@ -62,11 +62,15 @@ func GetUserRoles(ctx context.Context, userGroups []string) []string {
 	// mappings are found.
 	roles := []string{}
 	if len(viper.GetStringMapStringSlice("group_mappings")) > 0 {
+		// Iterate through each group in the userGroups slice.
 		for _, group := range userGroups {
+			// Check if the group is present in the group_mappings configuration.
 			if contains(getMapKeys(viper.GetStringMapStringSlice("group_mappings")), group) {
+				// If the group is found, append the corresponding roles to the roles slice.
 				roles = append(roles, viper.GetStringMapStringSlice("group_mappings")[strings.ToLower(group)]...)
 			}
 		}
+
 	}
 
 	if len(roles) == 0 {

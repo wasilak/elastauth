@@ -1,19 +1,11 @@
 package libs
 
 import (
-	"encoding/base64"
-	"errors"
-	"fmt"
 	"net/http"
-	"strings"
 
 	"github.com/labstack/echo/v4"
 	"github.com/spf13/viper"
-	"github.com/wasilak/elastauth/cache"
 	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/codes"
-	"golang.org/x/exp/slog"
 )
 
 // The HealthResponse type is a struct in Go that contains a single field called Status, which is a
@@ -53,143 +45,7 @@ type configResponse struct {
 // This function handles the main route of a web application, authenticating users and caching their
 // encrypted passwords.
 func MainRoute(c echo.Context) error {
-	tracer := otel.Tracer("MainRoute")
-
-	ctx, spanHeader := tracer.Start(c.Request().Context(), "Getting user information from request")
-
-	spanHeader.AddEvent("Getting username from header")
-	headerName := viper.GetString("headers_username")
-	user := c.Request().Header.Get(headerName)
-
-	if len(user) == 0 {
-		err := errors.New("Header not provided: " + headerName)
-		slog.ErrorCtx(ctx, err.Error())
-		spanHeader.RecordError(err)
-		spanHeader.SetStatus(codes.Error, err.Error())
-		response := ErrorResponse{
-			Message: err.Error(),
-			Code:    http.StatusBadRequest,
-		}
-		return c.JSON(http.StatusBadRequest, response)
-	}
-	spanHeader.End()
-
-	headerName = viper.GetString("headers_groups")
-	userGroups := strings.Split(c.Request().Header.Get(headerName), ",")
-
-	if len(userGroups) == 0 {
-		errorMessage := "Header not provided: " + headerName
-		slog.ErrorCtx(ctx, errorMessage)
-	}
-
-	ctx, spanCacheGet := tracer.Start(ctx, "cache get")
-	cacheKey := "elastauth-" + user
-	spanCacheGet.SetAttributes(attribute.String("user", user))
-	spanCacheGet.SetAttributes(attribute.String("cacheKey", cacheKey))
-
-	key := viper.GetString("secret_key")
-
-	spanCacheGet.AddEvent("Getting password from cache")
-	encryptedPasswordBase64, exists := cache.CacheInstance.Get(ctx, cacheKey)
-
-	if exists {
-		slog.DebugCtx(ctx, "Cache hit", slog.String("cacheKey", cacheKey))
-	} else {
-		slog.DebugCtx(ctx, "Cache miss", slog.String("cacheKey", cacheKey))
-	}
-	spanCacheGet.End()
-
-	if !exists {
-		ctx, spanCacheMiss := tracer.Start(ctx, "user access regeneration")
-
-		roles := GetUserRoles(ctx, userGroups)
-
-		userEmail := c.Request().Header.Get(viper.GetString("headers_email"))
-		userName := c.Request().Header.Get(viper.GetString("headers_name"))
-		spanCacheMiss.SetAttributes(attribute.String("userEmail", userEmail))
-		spanCacheMiss.SetAttributes(attribute.String("userName", userName))
-
-		spanCacheMiss.AddEvent("Generating temporary user password")
-		password, err := GenerateTemporaryUserPassword(ctx)
-		if err != nil {
-			slog.ErrorCtx(ctx, "Error", slog.Any("message", err))
-			return c.JSON(http.StatusInternalServerError, err)
-		}
-
-		spanCacheMiss.AddEvent("Encrypting temporary user password")
-		encryptedPassword, err := Encrypt(ctx, password, key)
-		if err != nil {
-			slog.ErrorCtx(ctx, "Error", slog.Any("message", err))
-			return c.JSON(http.StatusInternalServerError, err)
-		}
-
-		encryptedPasswordBase64 = string(base64.URLEncoding.EncodeToString([]byte(encryptedPassword)))
-
-		elasticsearchUserMetadata := ElasticsearchUserMetadata{
-			Groups: userGroups,
-		}
-
-		elasticsearchUser := ElasticsearchUser{
-			Password: password,
-			Enabled:  true,
-			Email:    userEmail,
-			FullName: userName,
-			Roles:    roles,
-			Metadata: elasticsearchUserMetadata,
-		}
-
-		if !viper.GetBool("elasticsearch_dry_run") {
-			err := initElasticClient(
-				ctx,
-				viper.GetString("elasticsearch_host"),
-				viper.GetString("elasticsearch_username"),
-				viper.GetString("elasticsearch_password"),
-			)
-			if err != nil {
-				slog.ErrorCtx(ctx, "Error", slog.Any("message", err))
-				return c.JSON(http.StatusInternalServerError, err)
-			}
-
-			spanCacheMiss.AddEvent("Upserting user in Elasticsearch")
-			err = UpsertUser(ctx, user, elasticsearchUser)
-			if err != nil {
-				slog.ErrorCtx(ctx, "Error", slog.Any("message", err))
-				return c.JSON(http.StatusInternalServerError, err)
-			}
-		}
-
-		spanCacheMiss.AddEvent("Setting cache item")
-		cache.CacheInstance.Set(ctx, cacheKey, encryptedPasswordBase64)
-		spanCacheMiss.End()
-	}
-
-	ctx, spanItemCache := tracer.Start(ctx, "handling item cache")
-	spanItemCache.SetAttributes(attribute.String("cacheKey", cacheKey))
-
-	itemCacheDuration, _ := cache.CacheInstance.GetItemTTL(ctx, cacheKey)
-
-	if viper.GetBool("extend_cache") && itemCacheDuration > 0 && itemCacheDuration < cache.CacheInstance.GetTTL(ctx) {
-		slog.DebugCtx(ctx, fmt.Sprintf("User %s: extending cache TTL (from %s to %s)", user, itemCacheDuration, viper.GetString("cache_expire")))
-		cache.CacheInstance.ExtendTTL(ctx, cacheKey, encryptedPasswordBase64)
-	}
-	spanItemCache.End()
-
-	ctx, spanDecrypt := tracer.Start(ctx, "password decryption")
-	spanDecrypt.AddEvent("Decrypting password")
-
-	decryptedPasswordBase64, _ := base64.URLEncoding.DecodeString(encryptedPasswordBase64.(string))
-
-	decryptedPassword, err := Decrypt(ctx, string(decryptedPasswordBase64), key)
-	if err != nil {
-		slog.ErrorCtx(ctx, "Error", slog.Any("message", err))
-		return c.JSON(http.StatusInternalServerError, err)
-	}
-
-	spanDecrypt.End()
-
-	c.Response().Header().Set(echo.HeaderAuthorization, "Basic "+basicAuth(user, decryptedPassword))
-
-	return c.NoContent(http.StatusOK)
+	return handleMainRequest(c)
 }
 
 // The function returns a JSON response with a "OK" status for a health route in a Go application.

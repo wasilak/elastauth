@@ -46,16 +46,24 @@ var CacheInstance CacheInterface
 // The function initializes a cache instance based on the cache type specified in the configuration
 // file.
 func CacheInit(ctx context.Context) {
+	// Create a tracer named "Cache" using OpenTelemetry.
 	tracer := otel.Tracer("Cache")
+
+	// Start a new span named "CacheInit" using the tracer and context.
 	_, span := tracer.Start(ctx, "CacheInit")
+
+	// Defer the end of the span to ensure it is ended when the function returns.
 	defer span.End()
 
+	// Parse the cache expiration duration from the Viper configuration.
 	cacheDuration, err := time.ParseDuration(viper.GetString("cache_expire"))
 	if err != nil {
 		log.Fatal(err)
 	}
 
+	// Check if the cache type is set to "redis".
 	if viper.GetString("cache_type") == "redis" {
+		// If it is, create a new RedisCache instance with the specified redis_host, redis_db, cache duration, and tracer.
 		CacheInstance = &RedisCache{
 			Address: viper.GetString("redis_host"),
 			DB:      viper.GetInt("redis_db"),
@@ -63,13 +71,17 @@ func CacheInit(ctx context.Context) {
 			Tracer:  otel.Tracer("RedisCache"),
 		}
 	} else if viper.GetString("cache_type") == "memory" {
+		// If the cache type is set to "memory", create a new GoCache instance with the specified cache duration and tracer.
 		CacheInstance = &GoCache{
 			TTL:    cacheDuration,
 			Tracer: otel.Tracer("GoCache"),
 		}
 	} else {
+		// If no cache type is selected or the cache type is invalid, log a fatal error message.
 		log.Fatal("No cache_type selected or cache type is invalid")
 	}
 
+	// Initialize the CacheInstance using the given context and cache duration.
 	CacheInstance.Init(ctx, cacheDuration)
+
 }

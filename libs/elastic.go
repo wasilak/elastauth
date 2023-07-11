@@ -82,34 +82,43 @@ var elasticsearchConnectionDetails ElasticsearchConnectionDetails
 // The function initializes an Elasticsearch client with connection details and sends a GET request to
 // the Elasticsearch URL with basic authentication.
 func initElasticClient(ctx context.Context, url, user, pass string) error {
+	// Start a new span for tracing with the name "initElasticClient".
 	_, span := tracerElastic.Start(ctx, "initElasticClient")
 	defer span.End()
 
+	// Create a new http client.
 	client = &http.Client{}
 
+	// Set the Elasticsearch connection details.
 	elasticsearchConnectionDetails = ElasticsearchConnectionDetails{
 		URL:      url,
 		Username: user,
 		Password: pass,
 	}
 
+	// Create a new GET request to the Elasticsearch URL.
 	req, err := http.NewRequest("GET", elasticsearchConnectionDetails.URL, nil)
 	if err != nil {
 		return err
 	}
 
+	// Add Basic Authentication header to the request.
 	req.Header.Add("Authorization", "Basic "+basicAuth(elasticsearchConnectionDetails.Username, elasticsearchConnectionDetails.Password))
+
+	// Send the request to the Elasticsearch server and get the response.
 	resp, err := client.Do(req)
 	if err != nil {
 		return err
 	}
 
+	// Close the response body when done.
 	defer resp.Body.Close()
 
+	// Parse the response body into a map[string]interface{} variable.
 	body := map[string]interface{}{}
-
 	json.NewDecoder(resp.Body).Decode(&body)
 
+	// Log the request response using slog.DebugCtx.
 	slog.DebugCtx(ctx, "Request response", slog.Any("body", body))
 
 	return nil
@@ -118,37 +127,46 @@ func initElasticClient(ctx context.Context, url, user, pass string) error {
 // The function UpsertUser sends a POST request to Elasticsearch to create or update a user with the
 // given username and user details.
 func UpsertUser(ctx context.Context, username string, elasticsearchUser ElasticsearchUser) error {
+	// Start a new span for tracing with the name "UpsertUser".
 	_, span := tracerElastic.Start(ctx, "UpsertUser")
 	defer span.End()
 
+	// Create a new http client.
 	client = &http.Client{}
 
+	// Construct the URL for upserting the user in Elasticsearch.
 	url := fmt.Sprintf("%s/_security/user/%s", elasticsearchConnectionDetails.URL, username)
 
+	// Marshal the elasticsearchUser into JSON payload.
 	jsonPayload, err := json.Marshal(elasticsearchUser)
 	if err != nil {
 		return err
 	}
 
+	// Create a new POST request to the specified URL with the JSON payload as the request body.
 	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonPayload))
 	if err != nil {
 		return err
 	}
 
+	// Add Basic Authentication and Content-Type headers to the request.
 	req.Header.Add("Authorization", "Basic "+basicAuth(elasticsearchConnectionDetails.Username, elasticsearchConnectionDetails.Password))
 	req.Header.Add("Content-Type", "application/json")
-	resp, err := client.Do(req)
 
+	// Send the request to Elasticsearch server and get the response.
+	resp, err := client.Do(req)
 	if err != nil {
 		return err
 	}
 
+	// Close the response body when done.
 	defer resp.Body.Close()
 
+	// Parse the response body into a map[string]interface{} variable.
 	body := map[string]interface{}{}
-
 	json.NewDecoder(resp.Body).Decode(&body)
 
+	// Log the request response using slog.DebugCtx.
 	slog.DebugCtx(ctx, "Request response", slog.Any("body", body))
 
 	return nil

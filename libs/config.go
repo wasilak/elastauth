@@ -83,7 +83,7 @@ func HandleSecretKey(ctx context.Context) error {
 			return err
 		}
 		viper.Set("secret_key", key)
-		slog.InfoCtx(ctx, "WARNING: No secret key provided. Setting randomly generated", slog.String("key", key))
+		slog.InfoContext(ctx, "WARNING: No secret key provided. Setting randomly generated", slog.String("key", key))
 	}
 
 	return nil

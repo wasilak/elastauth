@@ -111,7 +111,7 @@ func initElasticClient(ctx context.Context, url, user, pass string) error {
 
 	json.NewDecoder(resp.Body).Decode(&body)
 
-	slog.DebugCtx(ctx, "Request response", slog.Any("body", body))
+	slog.DebugContext(ctx, "Request response", slog.Any("body", body))
 
 	return nil
 }
@@ -150,7 +150,7 @@ func UpsertUser(ctx context.Context, username string, elasticsearchUser Elastics
 
 	json.NewDecoder(resp.Body).Decode(&body)
 
-	slog.DebugCtx(ctx, "Request response", slog.Any("body", body))
+	slog.DebugContext(ctx, "Request response", slog.Any("body", body))
 
 	return nil
 }

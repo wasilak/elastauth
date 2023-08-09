@@ -64,7 +64,7 @@ func MainRoute(c echo.Context) error {
 
 	if len(user) == 0 {
 		err := errors.New("Header not provided: " + headerName)
-		slog.ErrorCtx(ctx, err.Error())
+		slog.ErrorContext(ctx, err.Error())
 		spanHeader.RecordError(err)
 		spanHeader.SetStatus(codes.Error, err.Error())
 		response := ErrorResponse{
@@ -80,7 +80,7 @@ func MainRoute(c echo.Context) error {
 
 	if len(userGroups) == 0 {
 		errorMessage := "Header not provided: " + headerName
-		slog.ErrorCtx(ctx, errorMessage)
+		slog.ErrorContext(ctx, errorMessage)
 	}
 
 	ctx, spanCacheGet := tracer.Start(ctx, "cache get")
@@ -94,9 +94,9 @@ func MainRoute(c echo.Context) error {
 	encryptedPasswordBase64, exists := cache.CacheInstance.Get(ctx, cacheKey)
 
 	if exists {
-		slog.DebugCtx(ctx, "Cache hit", slog.String("cacheKey", cacheKey))
+		slog.DebugContext(ctx, "Cache hit", slog.String("cacheKey", cacheKey))
 	} else {
-		slog.DebugCtx(ctx, "Cache miss", slog.String("cacheKey", cacheKey))
+		slog.DebugContext(ctx, "Cache miss", slog.String("cacheKey", cacheKey))
 	}
 	spanCacheGet.End()
 
@@ -113,7 +113,7 @@ func MainRoute(c echo.Context) error {
 		spanCacheMiss.AddEvent("Generating temporary user password")
 		password, err := GenerateTemporaryUserPassword(ctx)
 		if err != nil {
-			slog.ErrorCtx(ctx, "Error", slog.Any("message", err))
+			slog.ErrorContext(ctx, "Error", slog.Any("message", err))
 			return c.JSON(http.StatusInternalServerError, err)
 		}
 
@@ -142,14 +142,14 @@ func MainRoute(c echo.Context) error {
 				viper.GetString("elasticsearch_password"),
 			)
 			if err != nil {
-				slog.ErrorCtx(ctx, "Error", slog.Any("message", err))
+				slog.ErrorContext(ctx, "Error", slog.Any("message", err))
 				return c.JSON(http.StatusInternalServerError, err)
 			}
 
 			spanCacheMiss.AddEvent("Upserting user in Elasticsearch")
 			err = UpsertUser(ctx, user, elasticsearchUser)
 			if err != nil {
-				slog.ErrorCtx(ctx, "Error", slog.Any("message", err))
+				slog.ErrorContext(ctx, "Error", slog.Any("message", err))
 				return c.JSON(http.StatusInternalServerError, err)
 			}
 		}
@@ -165,7 +165,7 @@ func MainRoute(c echo.Context) error {
 	itemCacheDuration, _ := cache.CacheInstance.GetItemTTL(ctx, cacheKey)
 
 	if viper.GetBool("extend_cache") && itemCacheDuration > 0 && itemCacheDuration < cache.CacheInstance.GetTTL(ctx) {
-		slog.DebugCtx(ctx, fmt.Sprintf("User %s: extending cache TTL (from %s to %s)", user, itemCacheDuration, viper.GetString("cache_expire")))
+		slog.DebugContext(ctx, fmt.Sprintf("User %s: extending cache TTL (from %s to %s)", user, itemCacheDuration, viper.GetString("cache_expire")))
 		cache.CacheInstance.ExtendTTL(ctx, cacheKey, encryptedPasswordBase64)
 	}
 	spanItemCache.End()

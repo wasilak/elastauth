@@ -34,7 +34,7 @@ func main() {
 		panic(err)
 	}
 
-	slog.DebugCtx(ctx, "logger", slog.Any("setings", viper.AllSettings()))
+	slog.DebugContext(ctx, "logger", slog.Any("setings", viper.AllSettings()))
 
 	cache.CacheInit(ctx)
 

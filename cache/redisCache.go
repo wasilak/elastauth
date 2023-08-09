@@ -78,7 +78,7 @@ func (c *RedisCache) Get(ctx context.Context, cacheKey string) (interface{}, boo
 	item, err := c.Cache.Get(ctx, cacheKey).Result()
 
 	if err != nil || len(item) == 0 {
-		slog.ErrorCtx(ctx, "Error", slog.Any("message", err))
+		slog.ErrorContext(ctx, "Error", slog.Any("message", err))
 		return item, false
 	}
 
@@ -112,7 +112,7 @@ func (c *RedisCache) GetItemTTL(ctx context.Context, cacheKey string) (time.Dura
 	item, err := c.Cache.TTL(ctx, cacheKey).Result()
 
 	if err != nil {
-		slog.ErrorCtx(ctx, "Error", slog.Any("message", err))
+		slog.ErrorContext(ctx, "Error", slog.Any("message", err))
 		return item, false
 	}
 

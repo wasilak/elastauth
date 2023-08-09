@@ -3,12 +3,13 @@ package main
 import (
 	"context"
 
+	"log/slog"
+
 	"github.com/spf13/viper"
 	"github.com/wasilak/elastauth/cache"
 	"github.com/wasilak/elastauth/libs"
 	"github.com/wasilak/elastauth/logger"
 	otelgotracer "github.com/wasilak/otelgo/tracing"
-	"golang.org/x/exp/slog"
 )
 
 // The main function initializes configuration, logger, secret key, cache, and web server for a Go

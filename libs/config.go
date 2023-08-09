@@ -7,8 +7,9 @@ import (
 	"log"
 	"os"
 
+	"log/slog"
+
 	"go.opentelemetry.io/otel"
-	"golang.org/x/exp/slog"
 
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"

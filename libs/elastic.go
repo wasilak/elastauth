@@ -7,8 +7,9 @@ import (
 	"fmt"
 	"net/http"
 
+	"log/slog"
+
 	"go.opentelemetry.io/otel"
-	"golang.org/x/exp/slog"
 )
 
 var tracerElastic = otel.Tracer("elastic")

@@ -7,13 +7,14 @@ import (
 	"net/http"
 	"strings"
 
+	"log/slog"
+
 	"github.com/labstack/echo/v4"
 	"github.com/spf13/viper"
 	"github.com/wasilak/elastauth/cache"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
-	"golang.org/x/exp/slog"
 )
 
 // The HealthResponse type is a struct in Go that contains a single field called Status, which is a

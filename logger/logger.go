@@ -4,8 +4,9 @@ import (
 	"os"
 	"strings"
 
+	"log/slog"
+
 	otelgoslog "github.com/wasilak/otelgo/slog"
-	"golang.org/x/exp/slog"
 )
 
 // The function initializes a logger with a specified log level and format, allowing the user to choose

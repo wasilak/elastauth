@@ -23,8 +23,12 @@ func main() {
 		panic(err)
 	}
 
+	tracerConfig := otelgotracer.OtelGoTracingConfig{
+		HostMetricsEnabled: true,
+	}
+
 	if viper.GetBool("enableOtel") {
-		otelgotracer.InitTracer(ctx, true)
+		otelgotracer.InitTracer(ctx, tracerConfig)
 	}
 
 	logger.LoggerInit(viper.GetString("log_level"), viper.GetString("log_format"))

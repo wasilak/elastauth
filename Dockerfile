@@ -1,6 +1,6 @@
 FROM quay.io/wasilak/golang:1.21-alpine as builder
 
-ADD . /app
+COPY . /app
 WORKDIR /app/
 RUN mkdir -p ./dist
 RUN go build -o ./dist/elastauth

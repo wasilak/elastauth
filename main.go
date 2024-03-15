@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"os"
 
 	"log/slog"
 
@@ -23,12 +24,16 @@ func main() {
 		panic(err)
 	}
 
-	tracerConfig := otelgotracer.OtelGoTracingConfig{
-		HostMetricsEnabled: true,
-	}
-
 	if viper.GetBool("enableOtel") {
-		otelgotracer.InitTracer(ctx, tracerConfig)
+		otelGoTracingConfig := otelgotracer.OtelGoTracingConfig{
+			HostMetricsEnabled:    viper.GetBool("enableOtelHostMetrics"),
+			RuntimeMetricsEnabled: viper.GetBool("enableOtelRuntimeMetrics"),
+		}
+		_, _, err := otelgotracer.Init(ctx, otelGoTracingConfig)
+		if err != nil {
+			slog.ErrorContext(ctx, err.Error())
+			os.Exit(1)
+		}
 	}
 
 	logger.LoggerInit(viper.GetString("log_level"), viper.GetString("log_format"))

@@ -33,12 +33,7 @@ jobs:
       - name: Setup Go environment
         uses: actions/setup-go@v4
         with:
-          # The Go version to download (if necessary) and use. Supports semver spec and ranges.
-          go-version: 1.21.x
-          # Whether to download only stable versions
-          # stable: # optional, default is true
-          # Used to pull node distributions from go-versions.  Since there's a default, this is typically not supplied by the user.
-          # token: # optional, default is ${{ github.token }}
+          go-version-file: go.mod
           cache-dependency-path: go.sum
 
       - name: Build executable

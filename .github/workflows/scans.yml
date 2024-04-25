@@ -25,7 +25,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install and run Spectral CI
-        uses: spectralops/spectral-github-action@v4
+        uses: spectralops/spectral-github-action@v5
         with:
           spectral-dsn: ${{ secrets.SPECTRAL_DSN }}
           spectral-args: scan --ok

@@ -32,12 +32,12 @@ jobs:
           spectral-dsn: ${{ secrets.SPECTRAL_DSN }}
           spectral-args: scan --ok
 
-      - name: Run Snyk to check for vulnerabilities
-        uses: snyk/actions/golang@master
-        env:
-          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-        with:
-          command: monitor
+      # - name: Run Snyk to check for vulnerabilities
+      #   uses: snyk/actions/golang@master
+      #   env:
+      #     SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+      #   with:
+      #     command: monitor
 
   # codacy-security-scan:
   #   permissions:

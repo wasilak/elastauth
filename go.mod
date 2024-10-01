@@ -3,7 +3,7 @@ module github.com/wasilak/elastauth
 go 1.23
 
 require (
-	github.com/go-redis/redis/v8 v8.11.5
+	github.com/go-redis/redis/v9 v9.6.1
 	github.com/labstack/echo-contrib v0.17.1
 	github.com/labstack/echo/v4 v4.12.0
 	github.com/patrickmn/go-cache v2.1.0+incompatible

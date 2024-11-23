@@ -21,11 +21,7 @@
       "matchManagers": [
         "gomod"
       ],
-      "postUpdateOptions": [
-        {
-          "gomodTidy": true
-        }
-      ]
+      "postUpdateOptions": []
     }
   ]
 }

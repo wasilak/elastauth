@@ -4,7 +4,7 @@ go 1.23
 
 require (
 	github.com/labstack/echo-contrib v0.17.1
-	github.com/labstack/echo/v4 v4.12.0
+	github.com/labstack/echo/v4 v4.13.0
 	github.com/patrickmn/go-cache v2.1.0+incompatible
 	github.com/redis/go-redis/v9 v9.7.0
 	github.com/sethvargo/go-password v0.3.1

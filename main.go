@@ -36,7 +36,7 @@ func main() {
 		}
 	}
 
-	logger.LoggerInit(viper.GetString("log_level"), viper.GetString("log_format"))
+	logger.LoggerInit(ctx, viper.GetString("log_level"), viper.GetString("log_format"))
 
 	err = libs.HandleSecretKey(ctx)
 	if err != nil {

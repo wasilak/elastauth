@@ -1,12 +1,17 @@
-FROM quay.io/wasilak/golang:1.23-alpine as builder
+FROM quay.io/wasilak/golang:1.23 AS builder
 
 COPY . /app
 WORKDIR /app/
 RUN mkdir -p ./dist
-RUN go build -o ./dist/elastauth
 
-FROM quay.io/wasilak/alpine:3
+RUN CGO_ENABLED=0 go build -o /elastauth
 
-COPY --from=builder /app/dist/elastauth /elastauth
+FROM scratch
+
+LABEL org.opencontainers.image.source="https://github.com/wasilak/elastauth"
+
+COPY --from=builder /elastauth .
+
+ENV USER=root
 
 CMD ["/elastauth"]

@@ -17,6 +17,8 @@ import (
 
 var tracerConfig = otel.Tracer("config")
 
+var LogLeveler *slog.LevelVar
+
 // This function initializes the configuration for an application using flags, environment variables,
 // and a YAML configuration file.
 func InitConfiguration() error {

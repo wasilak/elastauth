@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"os"
 
+	"github.com/wasilak/elastauth/libs"
 	"github.com/wasilak/loggergo"
 	loggergoLib "github.com/wasilak/loggergo/lib"
 	loggergoTypes "github.com/wasilak/loggergo/lib/types"
@@ -28,4 +29,6 @@ func LoggerInit(ctx context.Context, level string, logFormat string) {
 		slog.ErrorContext(ctx, err.Error())
 		os.Exit(1)
 	}
+
+	libs.LogLeveler = loggergo.GetLogLevelAccessor()
 }

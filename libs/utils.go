@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/hex"
+	"os"
 	"strings"
 
 	"github.com/sethvargo/go-password/password"
@@ -96,4 +97,15 @@ func GenerateKey(ctx context.Context) (string, error) {
 
 	return hex.EncodeToString(bytes), nil //encode key in bytes to string for saving
 
+}
+
+func GetAppName() string {
+	appName := os.Getenv("OTEL_SERVICE_NAME")
+	if appName == "" {
+		appName = os.Getenv("APP_NAME")
+		if appName == "" {
+			appName = "elastauth"
+		}
+	}
+	return appName
 }

@@ -2,14 +2,16 @@ package libs
 
 import (
 	"context"
+	"log/slog"
 	_ "net/http/pprof"
-	"os"
 	"strings"
 
 	"github.com/labstack/echo-contrib/prometheus"
+	"github.com/labstack/gommon/log"
 
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
+	slogecho "github.com/samber/slog-echo"
 	"github.com/spf13/viper"
 	"go.opentelemetry.io/contrib/instrumentation/github.com/labstack/echo/otelecho"
 	"go.opentelemetry.io/otel"
@@ -32,12 +34,17 @@ func WebserverInit(ctx context.Context) {
 
 	e.HidePort = true
 
-	e.Debug = viper.GetBool("debug")
+	// setting log/slog log level as echo logger level
+	e.Logger.SetLevel(log.Lvl(LogLeveler.Level().Level()))
 
-	e.Use(middleware.Logger())
+	e.Debug = strings.EqualFold(LogLeveler.Level().String(), "debug") || viper.GetBool("debug")
+
+	e.Use(slogecho.New(slog.Default()))
 
 	if viper.GetBool("enableOtel") {
-		e.Use(otelecho.Middleware(os.Getenv("OTEL_SERVICE_NAME")))
+		e.Use(otelecho.Middleware(GetAppName(), otelecho.WithSkipper(func(c echo.Context) bool {
+			return strings.Contains(c.Path(), "health")
+		})))
 	}
 
 	// This code block is checking if the `enable_metrics` flag is set to true in the configuration file

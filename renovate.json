@@ -16,12 +16,20 @@
   "enabled": true,
   "separateMajorMinor": true,
   "automerge": true,
+  "automergeStrategy": "branch",
+  "schedule": [
+    "after 1am and before 2am"
+  ],
   "packageRules": [
     {
-      "matchManagers": [
-        "gomod"
+      "matchUpdateTypes": [
+        "minor",
+        "patch"
       ],
-      "postUpdateOptions": []
+      "automerge": true,
+      "ignoreTests": false,
+      "stabilityDays": 0,
+      "prCreation": "not-pending"
     }
   ]
 }

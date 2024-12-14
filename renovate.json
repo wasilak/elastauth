@@ -28,6 +28,7 @@
         "patch"
       ],
       "automerge": true,
+      "platformAutomerge": true,
       "ignoreTests": false,
       "stabilityDays": 0,
       "prCreation": "not-pending"

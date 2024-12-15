@@ -19,7 +19,7 @@
   "automergeType": "pr",
   "automergeStrategy": "auto",
   "schedule": [
-    "after 1am and before 2am"
+    "* 0-3 * * *"
   ],
   "packageRules": [
     {

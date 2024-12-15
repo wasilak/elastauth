@@ -31,7 +31,10 @@
       "platformAutomerge": true,
       "ignoreTests": false,
       "stabilityDays": 0,
-      "prCreation": "not-pending"
+      "prCreation": "not-pending",
+      "schedule": [
+        "* 0-3 * * *"
+      ]
     }
   ]
 }

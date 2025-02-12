@@ -150,6 +150,10 @@ func UpsertUser(ctx context.Context, username string, elasticsearchUser Elastics
 
 	json.NewDecoder(resp.Body).Decode(&body)
 
+	if resp.StatusCode != 200 {
+		return fmt.Errorf("request failed: %+v", body)
+	}
+
 	slog.DebugContext(ctx, "Request response", slog.Any("body", body))
 
 	return nil

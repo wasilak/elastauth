@@ -71,7 +71,10 @@ func GetUserRoles(ctx context.Context, userGroups []string) []string {
 	}
 
 	if len(roles) == 0 {
-		return viper.GetStringSlice("default_roles")
+		roles = viper.GetStringSlice("default_roles")
+		if roles == nil {
+			roles = []string{}
+		}
 	}
 
 	return roles

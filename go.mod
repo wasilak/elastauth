@@ -9,7 +9,7 @@ require (
 	github.com/labstack/echo/v4 v4.13.3
 	github.com/labstack/gommon v0.4.2
 	github.com/patrickmn/go-cache v2.1.0+incompatible
-	github.com/redis/go-redis/v9 v9.7.1
+	github.com/redis/go-redis/v9 v9.7.3
 	github.com/samber/slog-echo v1.15.1
 	github.com/sethvargo/go-password v0.3.1
 	github.com/spf13/pflag v1.0.6

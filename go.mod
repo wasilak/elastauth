@@ -13,7 +13,7 @@ require (
 	github.com/samber/slog-echo v1.16.1
 	github.com/sethvargo/go-password v0.3.1
 	github.com/spf13/pflag v1.0.6
-	github.com/spf13/viper v1.20.0
+	github.com/spf13/viper v1.20.1
 	github.com/stretchr/testify v1.10.0
 	github.com/wasilak/loggergo v1.7.4
 	github.com/wasilak/otelgo v1.2.4

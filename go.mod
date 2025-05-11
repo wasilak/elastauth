@@ -2,7 +2,7 @@ module github.com/wasilak/elastauth
 
 go 1.24
 
-toolchain go1.24.1
+toolchain go1.24.3
 
 require (
 	github.com/labstack/echo-contrib v0.17.4

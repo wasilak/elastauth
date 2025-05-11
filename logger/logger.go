@@ -7,8 +7,6 @@ import (
 
 	"github.com/wasilak/elastauth/libs"
 	"github.com/wasilak/loggergo"
-	loggergoLib "github.com/wasilak/loggergo/lib"
-	loggergoTypes "github.com/wasilak/loggergo/lib/types"
 )
 
 // The function initializes a logger with a specified log level and format, allowing the user to choose
@@ -16,12 +14,12 @@ import (
 func LoggerInit(ctx context.Context, level string, logFormat string) {
 	var err error
 
-	loggerConfig := loggergoTypes.Config{
-		Level:        loggergoLib.LogLevelFromString(level),
-		Format:       loggergoLib.LogFormatFromString(logFormat),
+	loggerConfig := loggergo.Config{
+		Level:        loggergo.Types.LogLevelFromString(level),
+		Format:       loggergo.Types.LogFormatFromString(logFormat),
 		OutputStream: os.Stdout,
-		DevMode:      loggergoLib.LogLevelFromString(level) == slog.LevelDebug && logFormat == "plain",
-		Output:       loggergoTypes.OutputConsole,
+		DevMode:      loggergo.Types.LogLevelFromString(level) == slog.LevelDebug && logFormat == "plain",
+		Output:       loggergo.Types.OutputConsole,
 	}
 
 	ctx, _, err = loggergo.Init(ctx, loggerConfig)

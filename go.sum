@@ -122,6 +122,8 @@ github.com/wasilak/loggergo v1.7.6 h1:08PAikeZxuppK4pl2AT5zpgVCElTPz83X6t07wbBnn
 github.com/wasilak/loggergo v1.7.6/go.mod h1:DBYBoT6bb+gN0vmDDDd5kjSIWL7EJPc8LsBuGzkroy4=
 github.com/wasilak/otelgo v1.2.5 h1:0ByD2q36y+KMShsflMhHIyb2OpakNdL9f5CnSYYI1D8=
 github.com/wasilak/otelgo v1.2.5/go.mod h1:Htb5gj0dYc1TCihcm7/fQ4P7idcEaW6vNbZ8hH78jmA=
+github.com/wasilak/otelgo v1.2.6 h1:3utN2SdjrHmrWAujNUKSyscoOOqQR3Psb570o2Dz24Y=
+github.com/wasilak/otelgo v1.2.6/go.mod h1:Htb5gj0dYc1TCihcm7/fQ4P7idcEaW6vNbZ8hH78jmA=
 github.com/xybor-x/enum v1.4.0 h1:Bcv9amQlSsz+EDJW9feiDxCzzUkP1Bv2Lzwx1BGvGeU=
 github.com/xybor-x/enum v1.4.0/go.mod h1:cBN02xug2E1c3UJjZsF5eBg71usBXxX2ePFUFNOFs9o=
 github.com/yusufpapurcu/wmi v1.2.4 h1:zFUKzehAFReQwLys1b/iSMl+JQGSCSjtVqQn9bBrPo0=

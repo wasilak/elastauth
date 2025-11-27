@@ -1,4 +1,5 @@
 # Elastauth
+
 [![Docker Repository on Quay](https://quay.io/repository/wasilak/elastauth/status "Docker Repository on Quay")](https://quay.io/repository/wasilak/elastauth) [![CI](https://github.com/wasilak/elastauth/actions/workflows/main.yml/badge.svg)](https://github.com/wasilak/elastauth/actions/workflows/main.yml) [![Maintainability](https://api.codeclimate.com/v1/badges/d75cc6b44c7c33f0b530/maintainability)](https://codeclimate.com/github/wasilak/elastauth/maintainability) [![Go Reference](https://pkg.go.dev/badge/github.com/wasilak/elastauth.svg)](https://pkg.go.dev/github.com/wasilak/elastauth)
 
 Kibana LDAP/Active Directory Authentication Proxy
@@ -80,47 +81,60 @@ This diagram illustrates the complete authentication journey with decision point
 
 ```mermaid
 flowchart TD
-    A[Cloud/User Request] --> B(Traefik)
-
-    subgraph Traefik Components
-        B(Traefik)
-        C(chain middleware)
-        B --> C
+    Start[Request]@{shape: cloud} -- 1. starting request --> ForwardAuthAuthelia
+    
+    subgraph  
+        LDAP[LDAP]
     end
 
-    C -- forwardAuth #1 --> D[Authelia]
-    D --> E[LDAP]
-
-    D --> F{auth OK?}
-    F -- No (Red) --> C
-    F -- Yes (200) (Green) --> C
-
-    subgraph kibana-auth-proxy
-        G1{is cache valid?}
-        G2[generate random password]
-        G3[create/update Elasticsearch/Kibana local account]
-        G4[generate Basic Authorization Header]
-        
-        G1 -- No --> G2
-        G2 --> G3
-        G3 --> G4
-        G1 -- Yes --> G4
+    subgraph  
+        Kibana[Kibana]
     end
 
-    C -- forwardAuth #2 (Green) --> G1
-    
-    L(Redis Cache)
-    G1 <--> L
-    G3 <--> L
+    subgraph  
+        Redis[Redis]
+    end
 
-    G4 -- Authorization: Basic XXXYYYZZZZ --> B
+    AccessGranted -- 9 --> Kibana
+    Authelia <-- 3. veryfying credentials against LDAP --> LDAP
 
-    B -- all auth went well, forward to Kibana with Authorization header --> K[Kibana]
-    K --> L
-    
-    style E fill:#aaf, stroke:#333, stroke-width:2px
-    style L fill:#aaf, stroke:#333, stroke-width:2px
-    style K fill:#f9f, stroke:#333, stroke-width:2px
+    subgraph Traefik
+        subgraph chain middleware
+            ForwardAuthAuthelia(forward auth Authelia)
+            ForwardAuthElastauth(forward auth Elastauth)
+        end
+
+        subgraph Result
+            AccessDenied[Access Denied]
+            AccessGranted[Access Granted]
+        end
+    end
+
+    subgraph  
+        Authelia[Authelia]
+        ForwardAuthAuthelia -- 2. forwarding request to Authelia --> Authelia
+        Authelia -- 4a. Authentication Successfull --> ForwardAuthElastauth
+        Authelia -- 4b. Authentication Failed --> AccessDenied
+    end
+
+    subgraph  
+        Elastauth(Elastauth)@{img: "https://github.com/wasilak/elastauth/blob/main/gopher.png?raw=true", h: 200, constraint: on}
+        CacheValid{Is credentials cache valid?}
+        GenerateRandomPassword[Generate random password]
+        UpsertUser[Create/update Elasticsearch/Kibana local account]
+        GenerateAuth[Generate Basic Authorization Header]
+        AuthCredentials[Auth Credentials into Basic Auth header]
+
+        ForwardAuthElastauth -- 5. Forwarding User details as headers --> Elastauth
+        Elastauth --> CacheValid
+        CacheValid -- 6a. Yes --> Redis
+        CacheValid -- 6b. No --> GenerateRandomPassword
+        GenerateRandomPassword --> UpsertUser
+        UpsertUser --> GenerateAuth
+        GenerateAuth -- 7b --> AuthCredentials
+        Redis -- 7a. Getting cached credentials --> AuthCredentials
+        AuthCredentials -- 8--> AccessGranted
+    end
 ```
 
 **Key Decision Points:**

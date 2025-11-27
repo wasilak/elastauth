@@ -40,10 +40,18 @@ func main() {
 
 	err = libs.HandleSecretKey(ctx)
 	if err != nil {
-		panic(err)
+		slog.ErrorContext(ctx, "Failed to handle secret key", slog.Any("error", err))
+		os.Exit(1)
 	}
 
-	slog.DebugContext(ctx, "logger", slog.Any("setings", viper.AllSettings()))
+	err = libs.ValidateConfiguration(ctx)
+	if err != nil {
+		slog.ErrorContext(ctx, "Configuration validation failed", slog.Any("error", err))
+		os.Exit(1)
+	}
+
+	sanitizedSettings := libs.SanitizeForLogging(viper.AllSettings())
+	slog.InfoContext(ctx, "Configuration loaded successfully", slog.Any("settings", sanitizedSettings))
 
 	cache.CacheInit(ctx)
 

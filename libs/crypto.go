@@ -18,73 +18,75 @@ var tracerCrypto = otel.Tracer("crypto")
 
 // Encrypt encrypts a string using AES-GCM algorithm with a given key. The key
 // should be provided as a hexadecimal string. It returns the encrypted string
-// in hexadecimal format.
-func Encrypt(ctx context.Context, stringToEncrypt string, keyString string) (encryptedString string) {
+// in hexadecimal format and an error if encryption fails.
+func Encrypt(ctx context.Context, stringToEncrypt string, keyString string) (string, error) {
 	_, span := tracerCrypto.Start(ctx, "Encrypt")
 	defer span.End()
 
-	//Since the key is in string, we need to convert decode it to bytes
-	key, _ := hex.DecodeString(keyString)
+	key, err := hex.DecodeString(keyString)
+	if err != nil {
+		return "", fmt.Errorf("failed to decode encryption key from hex: %w", err)
+	}
 	plaintext := []byte(stringToEncrypt)
 
-	//Create a new Cipher Block from the key
 	block, err := aes.NewCipher(key)
 	if err != nil {
-		panic(err.Error())
+		return "", fmt.Errorf("failed to create cipher block: %w", err)
 	}
 
-	//Create a new GCM - https://en.wikipedia.org/wiki/Galois/Counter_Mode
-	//https://golang.org/pkg/crypto/cipher/#NewGCM
 	aesGCM, err := cipher.NewGCM(block)
 	if err != nil {
-		panic(err.Error())
+		return "", fmt.Errorf("failed to create GCM: %w", err)
 	}
 
-	//Create a nonce. Nonce should be from GCM
 	nonce := make([]byte, aesGCM.NonceSize())
 	if _, err = io.ReadFull(rand.Reader, nonce); err != nil {
-		panic(err.Error())
+		return "", fmt.Errorf("failed to generate nonce: %w", err)
 	}
 
-	//Encrypt the data using aesGCM.Seal
-	//Since we don't want to save the nonce somewhere else in this case, we add it as a prefix to the encrypted data. The first nonce argument in Seal is the prefix.
 	ciphertext := aesGCM.Seal(nonce, nonce, plaintext, nil)
-	return fmt.Sprintf("%x", ciphertext)
+	return fmt.Sprintf("%x", ciphertext), nil
 }
 
 // Decrypt decrypts a previously encrypted string using the same key used to
 // encrypt it. It takes in an encrypted string and a key string as parameters
-// and returns the decrypted string. The key must be in hexadecimal format.
-func Decrypt(ctx context.Context, encryptedString string, keyString string) (decryptedString string) {
+// and returns the decrypted string and an error if decryption fails.
+// The key must be in hexadecimal format.
+func Decrypt(ctx context.Context, encryptedString string, keyString string) (string, error) {
 	_, span := tracerCrypto.Start(ctx, "Decrypt")
 	defer span.End()
 
-	key, _ := hex.DecodeString(keyString)
-	enc, _ := hex.DecodeString(encryptedString)
+	key, err := hex.DecodeString(keyString)
+	if err != nil {
+		return "", fmt.Errorf("failed to decode encryption key from hex: %w", err)
+	}
 
-	//Create a new Cipher Block from the key
+	enc, err := hex.DecodeString(encryptedString)
+	if err != nil {
+		return "", fmt.Errorf("failed to decode ciphertext from hex: %w", err)
+	}
+
 	block, err := aes.NewCipher(key)
 	if err != nil {
-		panic(err.Error())
+		return "", fmt.Errorf("failed to create cipher block: %w", err)
 	}
 
-	//Create a new GCM
 	aesGCM, err := cipher.NewGCM(block)
 	if err != nil {
-		panic(err.Error())
+		return "", fmt.Errorf("failed to create GCM: %w", err)
 	}
 
-	//Get the nonce size
 	nonceSize := aesGCM.NonceSize()
+	if len(enc) < nonceSize+16 {
+		return "", fmt.Errorf("ciphertext too short: %d bytes (minimum %d bytes required)", len(enc), nonceSize+16)
+	}
 
-	//Extract the nonce from the encrypted data
 	nonce, ciphertext := enc[:nonceSize], enc[nonceSize:]
 
-	//Decrypt the data
 	plaintext, err := aesGCM.Open(nil, nonce, ciphertext, nil)
 	if err != nil {
-		panic(err.Error())
+		return "", fmt.Errorf("decryption failed (ciphertext may be corrupted or tampered): %w", err)
 	}
 
-	return string(plaintext)
+	return string(plaintext), nil
 }

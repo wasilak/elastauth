@@ -5,7 +5,11 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/hex"
+	"fmt"
+	"net/url"
 	"os"
+	"reflect"
+	"regexp"
 	"strings"
 
 	"github.com/sethvargo/go-password/password"
@@ -111,4 +115,162 @@ func GetAppName() string {
 		}
 	}
 	return appName
+}
+
+var (
+	usernamePattern = regexp.MustCompile(`^[a-zA-Z0-9._\-@]+$`)
+	emailPattern    = regexp.MustCompile(`^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$`)
+)
+
+func ValidateUsername(username string) error {
+	if len(username) == 0 {
+		return fmt.Errorf("username cannot be empty")
+	}
+	if len(username) > 255 {
+		return fmt.Errorf("username exceeds maximum length of 255 characters (got %d)", len(username))
+	}
+	if !usernamePattern.MatchString(username) {
+		return fmt.Errorf("username contains invalid characters; allowed: alphanumeric, dot, underscore, hyphen, at-sign")
+	}
+	return nil
+}
+
+func ValidateEmail(email string) error {
+	if len(email) == 0 {
+		return fmt.Errorf("email cannot be empty")
+	}
+	if len(email) > 320 {
+		return fmt.Errorf("email exceeds maximum length of 320 characters (got %d)", len(email))
+	}
+	if !emailPattern.MatchString(email) {
+		return fmt.Errorf("email format is invalid")
+	}
+	return nil
+}
+
+func ValidateName(name string) error {
+	if len(name) > 500 {
+		return fmt.Errorf("name exceeds maximum length of 500 characters (got %d)", len(name))
+	}
+	for _, r := range name {
+		if r < 32 && r != '\t' && r != '\n' && r != '\r' {
+			return fmt.Errorf("name contains invalid control characters")
+		}
+	}
+	return nil
+}
+
+func ValidateGroupName(group string) error {
+	if len(group) == 0 {
+		return fmt.Errorf("group name cannot be empty")
+	}
+	if len(group) > 255 {
+		return fmt.Errorf("group name exceeds maximum length of 255 characters (got %d)", len(group))
+	}
+	for _, r := range group {
+		if r < 32 {
+			return fmt.Errorf("group name contains invalid control characters")
+		}
+	}
+	return nil
+}
+
+func ParseAndValidateGroups(groupsHeader string, enableWhitelist bool, whitelist []string) ([]string, error) {
+	if len(groupsHeader) == 0 {
+		return []string{}, nil
+	}
+
+	rawGroups := strings.Split(groupsHeader, ",")
+	validatedGroups := []string{}
+
+	for _, group := range rawGroups {
+		trimmed := strings.TrimSpace(group)
+		if len(trimmed) == 0 {
+			continue
+		}
+
+		if err := ValidateGroupName(trimmed); err != nil {
+			return nil, err
+		}
+
+		if enableWhitelist {
+			if !contains(whitelist, trimmed) {
+				return nil, fmt.Errorf("group '%s' is not in whitelist", trimmed)
+			}
+		}
+
+		validatedGroups = append(validatedGroups, trimmed)
+	}
+
+	return validatedGroups, nil
+}
+
+func EncodeForCacheKey(username string) string {
+	return url.QueryEscape(username)
+}
+
+func IsSensitiveField(fieldName string) bool {
+	lowerName := strings.ToLower(fieldName)
+	sensitiveKeywords := []string{"password", "secret", "key", "token", "credential", "auth"}
+	for _, keyword := range sensitiveKeywords {
+		if strings.Contains(lowerName, keyword) {
+			return true
+		}
+	}
+	return false
+}
+
+func SanitizeForLogging(data interface{}) interface{} {
+	if data == nil {
+		return nil
+	}
+
+	v := reflect.ValueOf(data)
+	switch v.Kind() {
+	case reflect.Map:
+		result := make(map[string]interface{})
+		for _, key := range v.MapKeys() {
+			keyStr := fmt.Sprintf("%v", key.Interface())
+			val := v.MapIndex(key).Interface()
+
+			if IsSensitiveField(keyStr) {
+				result[keyStr] = "***REDACTED***"
+			} else {
+				result[keyStr] = SanitizeForLogging(val)
+			}
+		}
+		return result
+
+	case reflect.Struct:
+		result := make(map[string]interface{})
+		t := v.Type()
+		for i := 0; i < v.NumField(); i++ {
+			field := t.Field(i)
+			val := v.Field(i).Interface()
+
+			if IsSensitiveField(field.Name) {
+				result[field.Name] = "***REDACTED***"
+			} else {
+				result[field.Name] = SanitizeForLogging(val)
+			}
+		}
+		return result
+
+	case reflect.Slice, reflect.Array:
+		result := make([]interface{}, v.Len())
+		for i := 0; i < v.Len(); i++ {
+			result[i] = SanitizeForLogging(v.Index(i).Interface())
+		}
+		return result
+
+	default:
+		return data
+	}
+}
+
+func SafeLogError(err error) string {
+	if err == nil {
+		return ""
+	}
+	return "An error occurred. Please contact support if this persists."
 }

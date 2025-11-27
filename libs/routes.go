@@ -4,10 +4,8 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
-	"net/http"
-	"strings"
-
 	"log/slog"
+	"net/http"
 
 	"github.com/labstack/echo/v4"
 	"github.com/spf13/viper"
@@ -73,18 +71,43 @@ func MainRoute(c echo.Context) error {
 		}
 		return c.JSON(http.StatusBadRequest, response)
 	}
+
+	if err := ValidateUsername(user); err != nil {
+		slog.ErrorContext(ctx, "Invalid username format", slog.String("error", err.Error()))
+		spanHeader.RecordError(err)
+		spanHeader.SetStatus(codes.Error, err.Error())
+		response := ErrorResponse{
+			Message: err.Error(),
+			Code:    http.StatusBadRequest,
+		}
+		return c.JSON(http.StatusBadRequest, response)
+	}
 	spanHeader.End()
 
 	headerName = viper.GetString("headers_groups")
-	userGroups := strings.Split(c.Request().Header.Get(headerName), ",")
+	groupsHeader := c.Request().Header.Get(headerName)
+	enableGroupWhitelist := viper.GetBool("enable_group_whitelist")
+	var groupWhitelist []string
+	if enableGroupWhitelist {
+		groupWhitelist = viper.GetStringSlice("group_whitelist")
+	}
 
-	if len(userGroups) == 0 {
-		errorMessage := "Header not provided: " + headerName
-		slog.ErrorContext(ctx, errorMessage)
+	userGroups, err := ParseAndValidateGroups(groupsHeader, enableGroupWhitelist, groupWhitelist)
+	if err != nil {
+		slog.ErrorContext(ctx, "Invalid group format", slog.String("error", err.Error()))
+		response := ErrorResponse{
+			Message: err.Error(),
+			Code:    http.StatusBadRequest,
+		}
+		return c.JSON(http.StatusBadRequest, response)
+	}
+
+	if len(userGroups) == 0 && len(groupsHeader) == 0 {
+		slog.DebugContext(ctx, "No groups provided in header")
 	}
 
 	ctx, spanCacheGet := tracer.Start(ctx, "cache get")
-	cacheKey := "elastauth-" + user
+	cacheKey := "elastauth-" + EncodeForCacheKey(user)
 	spanCacheGet.SetAttributes(attribute.String("user", user))
 	spanCacheGet.SetAttributes(attribute.String("cacheKey", cacheKey))
 
@@ -106,7 +129,29 @@ func MainRoute(c echo.Context) error {
 		roles := GetUserRoles(ctx, userGroups)
 
 		userEmail := c.Request().Header.Get(viper.GetString("headers_email"))
+		if len(userEmail) > 0 {
+			if err := ValidateEmail(userEmail); err != nil {
+				slog.ErrorContext(ctx, "Invalid email format", slog.String("error", err.Error()))
+				response := ErrorResponse{
+					Message: err.Error(),
+					Code:    http.StatusBadRequest,
+				}
+				return c.JSON(http.StatusBadRequest, response)
+			}
+		}
+
 		userName := c.Request().Header.Get(viper.GetString("headers_name"))
+		if len(userName) > 0 {
+			if err := ValidateName(userName); err != nil {
+				slog.ErrorContext(ctx, "Invalid name format", slog.String("error", err.Error()))
+				response := ErrorResponse{
+					Message: err.Error(),
+					Code:    http.StatusBadRequest,
+				}
+				return c.JSON(http.StatusBadRequest, response)
+			}
+		}
+
 		spanCacheMiss.SetAttributes(attribute.String("userEmail", userEmail))
 		spanCacheMiss.SetAttributes(attribute.String("userName", userName))
 
@@ -118,7 +163,14 @@ func MainRoute(c echo.Context) error {
 		}
 
 		spanCacheMiss.AddEvent("Encrypting temporary user password")
-		encryptedPassword := Encrypt(ctx, password, key)
+		encryptedPassword, err := Encrypt(ctx, password, key)
+		if err != nil {
+			slog.ErrorContext(ctx, "Failed to encrypt password", slog.Any("error", SanitizeForLogging(err)))
+			return c.JSON(http.StatusInternalServerError, ErrorResponse{
+				Message: "Internal server error",
+				Code:    http.StatusInternalServerError,
+			})
+		}
 		encryptedPasswordBase64 = string(base64.URLEncoding.EncodeToString([]byte(encryptedPassword)))
 
 		elasticsearchUserMetadata := ElasticsearchUserMetadata{
@@ -173,9 +225,23 @@ func MainRoute(c echo.Context) error {
 	ctx, spanDecrypt := tracer.Start(ctx, "password decryption")
 	spanDecrypt.AddEvent("Decrypting password")
 
-	decryptedPasswordBase64, _ := base64.URLEncoding.DecodeString(encryptedPasswordBase64.(string))
+	decryptedPasswordBase64, err := base64.URLEncoding.DecodeString(encryptedPasswordBase64.(string))
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to decode password from cache", slog.Any("error", SanitizeForLogging(err)))
+		return c.JSON(http.StatusInternalServerError, ErrorResponse{
+			Message: "Internal server error",
+			Code:    http.StatusInternalServerError,
+		})
+	}
 
-	decryptedPassword := Decrypt(ctx, string(decryptedPasswordBase64), key)
+	decryptedPassword, err := Decrypt(ctx, string(decryptedPasswordBase64), key)
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to decrypt password", slog.Any("error", SanitizeForLogging(err)))
+		return c.JSON(http.StatusInternalServerError, ErrorResponse{
+			Message: "Internal server error",
+			Code:    http.StatusInternalServerError,
+		})
+	}
 	spanDecrypt.End()
 
 	c.Response().Header().Set(echo.HeaderAuthorization, "Basic "+basicAuth(user, decryptedPassword))

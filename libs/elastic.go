@@ -109,9 +109,12 @@ func initElasticClient(ctx context.Context, url, user, pass string) error {
 
 	body := map[string]interface{}{}
 
-	json.NewDecoder(resp.Body).Decode(&body)
+	err = json.NewDecoder(resp.Body).Decode(&body)
+	if err != nil {
+		return fmt.Errorf("failed to decode Elasticsearch response: %w", err)
+	}
 
-	slog.DebugContext(ctx, "Request response", slog.Any("body", body))
+	slog.DebugContext(ctx, "Request response", slog.Any("body", SanitizeForLogging(body)))
 
 	return nil
 }
@@ -148,13 +151,16 @@ func UpsertUser(ctx context.Context, username string, elasticsearchUser Elastics
 
 	body := map[string]interface{}{}
 
-	json.NewDecoder(resp.Body).Decode(&body)
-
-	if resp.StatusCode != 200 {
-		return fmt.Errorf("request failed: %+v", body)
+	err = json.NewDecoder(resp.Body).Decode(&body)
+	if err != nil {
+		return fmt.Errorf("failed to decode Elasticsearch response: %w", err)
 	}
 
-	slog.DebugContext(ctx, "Request response", slog.Any("body", body))
+	if resp.StatusCode != 200 {
+		return fmt.Errorf("request failed with status %d: %+v", resp.StatusCode, body)
+	}
+
+	slog.DebugContext(ctx, "Request response", slog.Any("body", SanitizeForLogging(body)))
 
 	return nil
 }

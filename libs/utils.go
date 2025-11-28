@@ -40,8 +40,9 @@ func getMapKeys(itemsMap map[string][]string) []string {
 	return keys
 }
 
-// The function generates a temporary user password that is 32 characters long with a mix of digits,
-// symbols, and upper/lower case letters, disallowing repeat characters.
+// GenerateTemporaryUserPassword creates a cryptographically secure temporary password
+// for user authentication. The password is 32 characters long and contains a mix of
+// digits, symbols, and upper/lower case letters with no repeated characters.
 func GenerateTemporaryUserPassword(ctx context.Context) (string, error) {
 	_, span := tracerUtils.Start(ctx, "GenerateTemporaryUserPassword")
 	defer span.End()
@@ -57,8 +58,9 @@ func GenerateTemporaryUserPassword(ctx context.Context) (string, error) {
 	return res, nil
 }
 
-// The function retrieves user roles based on their group mappings or default roles if no mappings are
-// found.
+// GetUserRoles determines the roles that should be assigned to a user based on their
+// group membership. If the user belongs to mapped groups, their roles are retrieved from
+// the group_mappings configuration. If no mapped groups are found, default_roles are used.
 func GetUserRoles(ctx context.Context, userGroups []string) []string {
 	_, span := tracerUtils.Start(ctx, "GetUserRoles")
 	defer span.End()
@@ -91,8 +93,8 @@ func basicAuth(username, pass string) string {
 	return base64.StdEncoding.EncodeToString([]byte(auth))
 }
 
-// The function generates a random 32 byte key for AES-256 encryption and returns it as a hexadecimal
-// encoded string.
+// GenerateKey generates a cryptographically secure random key suitable for AES-256 encryption.
+// The key is returned as a hexadecimal-encoded string (64 characters representing 32 bytes).
 func GenerateKey(ctx context.Context) (string, error) {
 	_, span := tracerUtils.Start(ctx, "GenerateKey")
 	defer span.End()
@@ -106,6 +108,8 @@ func GenerateKey(ctx context.Context) (string, error) {
 
 }
 
+// GetAppName retrieves the application name from environment variables.
+// It first checks OTEL_SERVICE_NAME, then APP_NAME, and defaults to "elastauth" if neither is set.
 func GetAppName() string {
 	appName := os.Getenv("OTEL_SERVICE_NAME")
 	if appName == "" {
@@ -122,6 +126,9 @@ var (
 	emailPattern    = regexp.MustCompile(`^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$`)
 )
 
+// ValidateUsername validates the format and length of a username.
+// Valid usernames contain only alphanumeric characters, dots, underscores, hyphens, and at-signs,
+// and must be between 1 and 255 characters long.
 func ValidateUsername(username string) error {
 	if len(username) == 0 {
 		return fmt.Errorf("username cannot be empty")
@@ -135,6 +142,9 @@ func ValidateUsername(username string) error {
 	return nil
 }
 
+// ValidateEmail validates the format and length of an email address.
+// Valid emails follow standard RFC 5322 basic format requirements and
+// must be between 1 and 320 characters long.
 func ValidateEmail(email string) error {
 	if len(email) == 0 {
 		return fmt.Errorf("email cannot be empty")
@@ -148,6 +158,9 @@ func ValidateEmail(email string) error {
 	return nil
 }
 
+// ValidateName validates the format and length of a user's full name.
+// Valid names must not exceed 500 characters and cannot contain control characters
+// (except tab, newline, and carriage return).
 func ValidateName(name string) error {
 	if len(name) > 500 {
 		return fmt.Errorf("name exceeds maximum length of 500 characters (got %d)", len(name))
@@ -160,6 +173,8 @@ func ValidateName(name string) error {
 	return nil
 }
 
+// ValidateGroupName validates the format and length of a group name.
+// Valid group names must be between 1 and 255 characters long and cannot contain control characters.
 func ValidateGroupName(group string) error {
 	if len(group) == 0 {
 		return fmt.Errorf("group name cannot be empty")
@@ -175,6 +190,9 @@ func ValidateGroupName(group string) error {
 	return nil
 }
 
+// ParseAndValidateGroups parses a comma-separated string of group names and validates each one.
+// If enableWhitelist is true, only groups in the provided whitelist are accepted.
+// Returns a slice of validated group names or an error if validation fails.
 func ParseAndValidateGroups(groupsHeader string, enableWhitelist bool, whitelist []string) ([]string, error) {
 	if len(groupsHeader) == 0 {
 		return []string{}, nil
@@ -205,10 +223,14 @@ func ParseAndValidateGroups(groupsHeader string, enableWhitelist bool, whitelist
 	return validatedGroups, nil
 }
 
+// EncodeForCacheKey encodes a username for safe use as a cache key.
+// It uses URL encoding to ensure special characters don't interfere with cache key format.
 func EncodeForCacheKey(username string) string {
 	return url.QueryEscape(username)
 }
 
+// IsSensitiveField checks whether a field name represents sensitive data that should be redacted in logs.
+// It looks for common sensitive keywords like "password", "secret", "key", "token", "credential", and "auth".
 func IsSensitiveField(fieldName string) bool {
 	lowerName := strings.ToLower(fieldName)
 	sensitiveKeywords := []string{"password", "secret", "key", "token", "credential", "auth"}
@@ -220,6 +242,9 @@ func IsSensitiveField(fieldName string) bool {
 	return false
 }
 
+// SanitizeForLogging recursively processes data structures and redacts sensitive fields
+// to prevent credentials and secrets from being logged. It handles maps, structs, slices,
+// and other types by checking field names against a list of sensitive keywords.
 func SanitizeForLogging(data interface{}) interface{} {
 	if data == nil {
 		return nil
@@ -268,6 +293,9 @@ func SanitizeForLogging(data interface{}) interface{} {
 	}
 }
 
+// SafeLogError returns a generic error message that does not expose implementation details.
+// This should be used when displaying errors to end users or in logs where sensitive
+// information should not be disclosed.
 func SafeLogError(err error) string {
 	if err == nil {
 		return ""

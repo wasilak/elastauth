@@ -21,7 +21,8 @@ func main() {
 
 	err := libs.InitConfiguration()
 	if err != nil {
-		panic(err)
+		slog.ErrorContext(ctx, "Failed to initialize configuration", slog.Any("error", err))
+		os.Exit(1)
 	}
 
 	if viper.GetBool("enableOtel") {

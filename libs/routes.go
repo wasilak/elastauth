@@ -3,7 +3,6 @@ package libs
 import (
 	"encoding/base64"
 	"errors"
-	"fmt"
 	"log/slog"
 	"net/http"
 
@@ -49,8 +48,10 @@ type configResponse struct {
 	GroupMappings map[string][]string `json:"group_mappings"`
 }
 
-// This function handles the main route of a web application, authenticating users and caching their
-// encrypted passwords.
+// MainRoute is the main authentication handler that processes user authentication requests.
+// It extracts user information from request headers, validates input, generates temporary passwords,
+// optionally upserts the user to Elasticsearch, caches encrypted passwords, and returns basic auth credentials.
+// The route supports caching to improve performance on repeated requests for the same user.
 func MainRoute(c echo.Context) error {
 	tracer := otel.Tracer("MainRoute")
 
@@ -158,8 +159,11 @@ func MainRoute(c echo.Context) error {
 		spanCacheMiss.AddEvent("Generating temporary user password")
 		password, err := GenerateTemporaryUserPassword(ctx)
 		if err != nil {
-			slog.ErrorContext(ctx, "Error", slog.Any("message", err))
-			return c.JSON(http.StatusInternalServerError, err)
+			slog.ErrorContext(ctx, "Failed to generate temporary user password", slog.Any("error", SanitizeForLogging(err)))
+			return c.JSON(http.StatusInternalServerError, ErrorResponse{
+				Message: "Internal server error",
+				Code:    http.StatusInternalServerError,
+			})
 		}
 
 		spanCacheMiss.AddEvent("Encrypting temporary user password")
@@ -194,15 +198,21 @@ func MainRoute(c echo.Context) error {
 				viper.GetString("elasticsearch_password"),
 			)
 			if err != nil {
-				slog.ErrorContext(ctx, "Error", slog.Any("message", err))
-				return c.JSON(http.StatusInternalServerError, err)
+				slog.ErrorContext(ctx, "Failed to initialize Elasticsearch client", slog.Any("error", SanitizeForLogging(err)))
+				return c.JSON(http.StatusInternalServerError, ErrorResponse{
+					Message: "Internal server error",
+					Code:    http.StatusInternalServerError,
+				})
 			}
 
 			spanCacheMiss.AddEvent("Upserting user in Elasticsearch")
 			err = UpsertUser(ctx, user, elasticsearchUser)
 			if err != nil {
-				slog.ErrorContext(ctx, "Error", slog.Any("message", err))
-				return c.JSON(http.StatusInternalServerError, err)
+				slog.ErrorContext(ctx, "Failed to upsert user in Elasticsearch", slog.Any("error", SanitizeForLogging(err)))
+				return c.JSON(http.StatusInternalServerError, ErrorResponse{
+					Message: "Internal server error",
+					Code:    http.StatusInternalServerError,
+				})
 			}
 		}
 
@@ -217,7 +227,7 @@ func MainRoute(c echo.Context) error {
 	itemCacheDuration, _ := cache.CacheInstance.GetItemTTL(ctx, cacheKey)
 
 	if viper.GetBool("extend_cache") && itemCacheDuration > 0 && itemCacheDuration < cache.CacheInstance.GetTTL(ctx) {
-		slog.DebugContext(ctx, fmt.Sprintf("User %s: extending cache TTL (from %s to %s)", user, itemCacheDuration, viper.GetString("cache_expire")))
+		slog.DebugContext(ctx, "Extending cache TTL", slog.String("user", user), slog.Duration("currentTTL", itemCacheDuration), slog.String("configuredTTL", viper.GetString("cache_expire")))
 		cache.CacheInstance.ExtendTTL(ctx, cacheKey, encryptedPasswordBase64)
 	}
 	spanItemCache.End()
@@ -249,7 +259,8 @@ func MainRoute(c echo.Context) error {
 	return c.NoContent(http.StatusOK)
 }
 
-// The function returns a JSON response with a "OK" status for a health route in a Go application.
+// HealthRoute responds to health checks with a JSON response containing the application status.
+// This endpoint is typically used by load balancers or monitoring systems to verify the application is running.
 func HealthRoute(c echo.Context) error {
 	tracer := otel.Tracer("HealthRoute")
 	_, span := tracer.Start(c.Request().Context(), "response")
@@ -262,8 +273,8 @@ func HealthRoute(c echo.Context) error {
 	return c.JSON(http.StatusOK, response)
 }
 
-// The function returns a JSON response containing default roles and group mappings from a
-// configuration file.
+// ConfigRoute returns the application's configuration for default roles and group-to-role mappings.
+// This endpoint allows clients to discover which roles users will receive based on their groups.
 func ConfigRoute(c echo.Context) error {
 	tracer := otel.Tracer("ConfigRoute")
 	_, span := tracer.Start(c.Request().Context(), "response")

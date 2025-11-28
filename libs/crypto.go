@@ -16,9 +16,9 @@ import (
 
 var tracerCrypto = otel.Tracer("crypto")
 
-// Encrypt encrypts a string using AES-GCM algorithm with a given key. The key
-// should be provided as a hexadecimal string. It returns the encrypted string
-// in hexadecimal format and an error if encryption fails.
+// Encrypt encrypts a plaintext string using the AES-256-GCM cipher.
+// The key parameter must be a 64-character hexadecimal string (representing 32 bytes).
+// Returns the ciphertext as a hexadecimal string with the nonce prepended.
 func Encrypt(ctx context.Context, stringToEncrypt string, keyString string) (string, error) {
 	_, span := tracerCrypto.Start(ctx, "Encrypt")
 	defer span.End()
@@ -48,10 +48,9 @@ func Encrypt(ctx context.Context, stringToEncrypt string, keyString string) (str
 	return fmt.Sprintf("%x", ciphertext), nil
 }
 
-// Decrypt decrypts a previously encrypted string using the same key used to
-// encrypt it. It takes in an encrypted string and a key string as parameters
-// and returns the decrypted string and an error if decryption fails.
-// The key must be in hexadecimal format.
+// Decrypt decrypts an AES-256-GCM encrypted string back to plaintext.
+// The encryptedString parameter must be a hexadecimal string produced by Encrypt.
+// The key parameter must be the same 64-character hexadecimal key used during encryption.
 func Decrypt(ctx context.Context, encryptedString string, keyString string) (string, error) {
 	_, span := tracerCrypto.Start(ctx, "Decrypt")
 	defer span.End()

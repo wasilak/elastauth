@@ -21,8 +21,9 @@ var tracerConfig = otel.Tracer("config")
 
 var LogLeveler *slog.LevelVar
 
-// This function initializes the configuration for an application using flags, environment variables,
-// and a YAML configuration file.
+// InitConfiguration initializes the application configuration from command-line flags,
+// environment variables (prefixed with ELASTAUTH_), and a YAML configuration file.
+// It sets up viper to read from these sources and establishes default values for various settings.
 func InitConfiguration() error {
 	flag.Bool("generateKey", false, "Generate valid encryption key for use in app")
 	flag.String("listen", "127.0.0.1:5000", "Listen address")
@@ -66,8 +67,9 @@ func InitConfiguration() error {
 	return nil
 }
 
-// The function generates and sets a secret key if one is not provided or generates and prints a secret
-// key if the "generateKey" flag is set to true.
+// HandleSecretKey manages the encryption secret key configuration.
+// If the generateKey flag is set, it generates a new key, prints it, and exits.
+// If no secret key is configured, it generates a random one and logs a warning.
 func HandleSecretKey(ctx context.Context) error {
 	_, span := tracerConfig.Start(ctx, "HandleSecretKey")
 	defer span.End()
@@ -94,6 +96,8 @@ func HandleSecretKey(ctx context.Context) error {
 	return nil
 }
 
+// ValidateSecretKey validates that the secret key is properly configured as a 64-character
+// hexadecimal string representing a 32-byte (256-bit) AES key.
 func ValidateSecretKey(key string) error {
 	if len(key) == 0 {
 		return fmt.Errorf("secret_key is required (set via ELASTAUTH_SECRET_KEY environment variable)")
@@ -111,6 +115,8 @@ func ValidateSecretKey(key string) error {
 	return nil
 }
 
+// ValidateRequiredConfig checks that all required configuration parameters are set.
+// Required parameters include Elasticsearch credentials, host, and the encryption secret key.
 func ValidateRequiredConfig(ctx context.Context) error {
 	required := map[string]string{
 		"elasticsearch_host":     "ELASTAUTH_ELASTICSEARCH_HOST",
@@ -133,6 +139,8 @@ func ValidateRequiredConfig(ctx context.Context) error {
 	return nil
 }
 
+// ValidateConfiguration performs comprehensive validation of all configuration parameters.
+// It checks required settings, secret key format, cache type, log levels, and other configuration options.
 func ValidateConfiguration(ctx context.Context) error {
 	if err := ValidateRequiredConfig(ctx); err != nil {
 		return err

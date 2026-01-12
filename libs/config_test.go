@@ -4,6 +4,8 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"os"
+	"strings"
 	"testing"
 
 	"github.com/spf13/viper"
@@ -648,4 +650,174 @@ func TestValidateConfiguration_MissingRequiredField(t *testing.T) {
 
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "required configuration missing")
+}
+
+func TestEnvironmentVariableSupport(t *testing.T) {
+	// Save original environment
+	originalEnv := make(map[string]string)
+	envVars := []string{
+		"ELASTAUTH_AUTH_PROVIDER",
+		"ELASTAUTH_OIDC_CLIENT_SECRET",
+		"ELASTAUTH_OIDC_SCOPES",
+		"ELASTAUTH_CACHE_TYPE",
+		"ELASTAUTH_AUTHELIA_HEADER_USERNAME",
+	}
+	
+	for _, envVar := range envVars {
+		originalEnv[envVar] = os.Getenv(envVar)
+	}
+	
+	// Clean up after test
+	defer func() {
+		for _, envVar := range envVars {
+			if originalValue, exists := originalEnv[envVar]; exists && originalValue != "" {
+				os.Setenv(envVar, originalValue)
+			} else {
+				os.Unsetenv(envVar)
+			}
+		}
+		viper.Reset()
+	}()
+	
+	// Set test environment variables
+	os.Setenv("ELASTAUTH_AUTH_PROVIDER", "oidc")
+	os.Setenv("ELASTAUTH_OIDC_CLIENT_SECRET", "test-secret-from-env")
+	os.Setenv("ELASTAUTH_OIDC_SCOPES", "openid,profile,email,custom")
+	os.Setenv("ELASTAUTH_CACHE_TYPE", "redis")
+	os.Setenv("ELASTAUTH_AUTHELIA_HEADER_USERNAME", "X-Remote-User")
+	
+	// Reset viper and set up environment variable support
+	viper.Reset()
+	viper.SetEnvPrefix("elastauth")
+	viper.AutomaticEnv()
+	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
+	
+	// Set defaults and bind environment variables
+	setConfigurationDefaults()
+	bindProviderEnvironmentVariables()
+	
+	// Test that environment variables override defaults
+	if viper.GetString("auth_provider") != "oidc" {
+		t.Errorf("Expected auth_provider to be 'oidc', got '%s'", viper.GetString("auth_provider"))
+	}
+	
+	if viper.GetString("oidc.client_secret") != "test-secret-from-env" {
+		t.Errorf("Expected oidc.client_secret to be 'test-secret-from-env', got '%s'", viper.GetString("oidc.client_secret"))
+	}
+	
+	if viper.GetString("cache.type") != "redis" {
+		t.Errorf("Expected cache.type to be 'redis', got '%s'", viper.GetString("cache.type"))
+	}
+	
+	if viper.GetString("authelia.header_username") != "X-Remote-User" {
+		t.Errorf("Expected authelia.header_username to be 'X-Remote-User', got '%s'", viper.GetString("authelia.header_username"))
+	}
+	
+	// Test OIDC scopes array parsing
+	scopes := viper.GetStringSlice("oidc.scopes")
+	expectedScopes := []string{"openid", "profile", "email", "custom"}
+	if len(scopes) != len(expectedScopes) {
+		t.Errorf("Expected %d scopes, got %d", len(expectedScopes), len(scopes))
+	}
+	for i, expected := range expectedScopes {
+		if i >= len(scopes) || scopes[i] != expected {
+			t.Errorf("Expected scope[%d] to be '%s', got '%s'", i, expected, scopes[i])
+		}
+	}
+}
+
+func TestOIDCCustomHeadersEnvironmentVariables(t *testing.T) {
+	// Save original environment
+	originalEnv := make(map[string]string)
+	customHeaderEnvVars := []string{
+		"ELASTAUTH_OIDC_CUSTOM_HEADERS_X_CUSTOM_HEADER",
+		"ELASTAUTH_OIDC_CUSTOM_HEADERS_AUTHORIZATION_EXTRA",
+	}
+	
+	for _, envVar := range customHeaderEnvVars {
+		originalEnv[envVar] = os.Getenv(envVar)
+	}
+	
+	// Clean up after test
+	defer func() {
+		for _, envVar := range customHeaderEnvVars {
+			if originalValue, exists := originalEnv[envVar]; exists && originalValue != "" {
+				os.Setenv(envVar, originalValue)
+			} else {
+				os.Unsetenv(envVar)
+			}
+		}
+		viper.Reset()
+	}()
+	
+	// Set test custom header environment variables
+	os.Setenv("ELASTAUTH_OIDC_CUSTOM_HEADERS_X_CUSTOM_HEADER", "custom-value")
+	os.Setenv("ELASTAUTH_OIDC_CUSTOM_HEADERS_AUTHORIZATION_EXTRA", "Bearer extra-token")
+	
+	// Reset viper and set up environment variable support
+	viper.Reset()
+	viper.SetEnvPrefix("elastauth")
+	viper.AutomaticEnv()
+	
+	// Set defaults and bind environment variables (including custom headers)
+	setConfigurationDefaults()
+	bindProviderEnvironmentVariables()
+	
+	// Test that custom headers are properly parsed
+	customHeaders := viper.GetStringMapString("oidc.custom_headers")
+	
+	// The headers are stored with the converted names (underscores to hyphens)
+	expectedHeaders := map[string]string{
+		"X-CUSTOM-HEADER":     "custom-value",
+		"AUTHORIZATION-EXTRA": "Bearer extra-token",
+	}
+	
+	if len(customHeaders) != len(expectedHeaders) {
+		t.Errorf("Expected %d custom headers, got %d", len(expectedHeaders), len(customHeaders))
+	}
+	
+	for expectedKey, expectedValue := range expectedHeaders {
+		if actualValue, exists := customHeaders[expectedKey]; !exists {
+			t.Errorf("Expected custom header '%s' not found", expectedKey)
+		} else if actualValue != expectedValue {
+			t.Errorf("Expected custom header '%s' to be '%s', got '%s'", expectedKey, expectedValue, actualValue)
+		}
+	}
+}
+
+func TestConfigurationPrecedence(t *testing.T) {
+	// Save original environment
+	originalAuthProvider := os.Getenv("ELASTAUTH_AUTH_PROVIDER")
+	
+	// Clean up after test
+	defer func() {
+		if originalAuthProvider != "" {
+			os.Setenv("ELASTAUTH_AUTH_PROVIDER", originalAuthProvider)
+		} else {
+			os.Unsetenv("ELASTAUTH_AUTH_PROVIDER")
+		}
+		viper.Reset()
+	}()
+	
+	// Test 1: Default value (no config file, no env var)
+	viper.Reset()
+	setConfigurationDefaults()
+	
+	if viper.GetString("auth_provider") != "authelia" {
+		t.Errorf("Expected default auth_provider to be 'authelia', got '%s'", viper.GetString("auth_provider"))
+	}
+	
+	// Test 2: Environment variable overrides default
+	os.Setenv("ELASTAUTH_AUTH_PROVIDER", "oidc")
+	viper.Reset()
+	viper.SetEnvPrefix("elastauth")
+	viper.AutomaticEnv()
+	
+	// Set defaults first, then bind environment variables
+	setConfigurationDefaults()
+	bindProviderEnvironmentVariables()
+	
+	if viper.GetString("auth_provider") != "oidc" {
+		t.Errorf("Expected environment variable to override default, got '%s'", viper.GetString("auth_provider"))
+	}
 }

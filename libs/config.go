@@ -21,9 +21,23 @@ var tracerConfig = otel.Tracer("config")
 
 var LogLeveler *slog.LevelVar
 
-// InitConfiguration initializes the application configuration from command-line flags,
-// environment variables (prefixed with ELASTAUTH_), and a YAML configuration file.
-// It sets up viper to read from these sources and establishes default values for various settings.
+// InitConfiguration initializes the application configuration with proper precedence:
+// 1. Environment variables (highest precedence) - prefixed with ELASTAUTH_
+// 2. Configuration file values (middle precedence) - config.yml
+// 3. Default values (lowest precedence)
+//
+// Environment Variable Support:
+// - All configuration settings can be overridden via environment variables
+// - Provider-specific settings: ELASTAUTH_<PROVIDER>_<SETTING>
+// - Nested settings use underscores: ELASTAUTH_OIDC_CLIENT_SECRET
+// - Special handling for arrays (OIDC scopes) and maps (custom headers)
+// - Sensitive values should be set via environment variables for security
+//
+// Examples:
+// - ELASTAUTH_AUTH_PROVIDER=oidc
+// - ELASTAUTH_OIDC_CLIENT_SECRET=secret123
+// - ELASTAUTH_OIDC_SCOPES=openid,profile,email
+// - ELASTAUTH_OIDC_CUSTOM_HEADERS_X_CUSTOM_HEADER=value
 func InitConfiguration() error {
 	flag.Bool("generateKey", false, "Generate valid encryption key for use in app")
 	flag.String("listen", "127.0.0.1:5000", "Listen address")
@@ -34,13 +48,35 @@ func InitConfiguration() error {
 	pflag.Parse()
 	viper.BindPFlags(pflag.CommandLine)
 
+	// Configure environment variable support with proper precedence
 	viper.SetEnvPrefix("elastauth")
 	viper.AutomaticEnv()
+	
+	// Enable environment variable substitution in config files
+	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 
 	viper.SetConfigName("config")
 	viper.SetConfigType("yaml")
 	viper.AddConfigPath(viper.GetString("config"))
 
+	// Set defaults first (lowest precedence)
+	setConfigurationDefaults()
+
+	// Read config file (middle precedence)
+	err := viper.ReadInConfig()
+	if err != nil {
+		log.Println(err)
+	}
+
+	// Bind specific environment variables for provider-specific settings
+	// This ensures environment variables override config file values
+	bindProviderEnvironmentVariables()
+
+	return nil
+}
+
+// setConfigurationDefaults sets all default configuration values
+func setConfigurationDefaults() {
 	// Provider configuration defaults
 	viper.SetDefault("auth_provider", "authelia")
 
@@ -77,19 +113,196 @@ func InitConfiguration() error {
 	viper.SetDefault("oidc.claim_mappings.groups", "groups")
 	viper.SetDefault("oidc.claim_mappings.full_name", "name")
 
+	// Casdoor provider defaults
+	viper.SetDefault("casdoor.organization", "built-in")
+	viper.SetDefault("casdoor.application", "app-built-in")
+
 	viper.SetDefault("enable_metrics", false)
-
 	viper.SetDefault("enableOtel", false)
-
 	viper.SetDefault("log_level", "info")
 	viper.SetDefault("log_format", "text")
+}
 
-	err := viper.ReadInConfig()
-	if err != nil {
-		log.Println(err)
+// bindProviderEnvironmentVariables explicitly binds environment variables for provider-specific settings
+// This ensures proper precedence: environment variables > config files > defaults
+func bindProviderEnvironmentVariables() {
+	// Core configuration
+	viper.BindEnv("auth_provider", "ELASTAUTH_AUTH_PROVIDER")
+	viper.BindEnv("secret_key", "ELASTAUTH_SECRET_KEY")
+	viper.BindEnv("elasticsearch_host", "ELASTAUTH_ELASTICSEARCH_HOST")
+	viper.BindEnv("elasticsearch_username", "ELASTAUTH_ELASTICSEARCH_USERNAME")
+	viper.BindEnv("elasticsearch_password", "ELASTAUTH_ELASTICSEARCH_PASSWORD")
+	viper.BindEnv("elasticsearch_dry_run", "ELASTAUTH_ELASTICSEARCH_DRY_RUN")
+	
+	// Cache configuration
+	viper.BindEnv("cache.type", "ELASTAUTH_CACHE_TYPE")
+	viper.BindEnv("cache.expiration", "ELASTAUTH_CACHE_EXPIRATION")
+	viper.BindEnv("cache.redis_host", "ELASTAUTH_CACHE_REDIS_HOST")
+	viper.BindEnv("cache.redis_db", "ELASTAUTH_CACHE_REDIS_DB")
+	viper.BindEnv("cache.path", "ELASTAUTH_CACHE_PATH")
+	
+	// Authelia provider configuration
+	viper.BindEnv("authelia.header_username", "ELASTAUTH_AUTHELIA_HEADER_USERNAME")
+	viper.BindEnv("authelia.header_groups", "ELASTAUTH_AUTHELIA_HEADER_GROUPS")
+	viper.BindEnv("authelia.header_email", "ELASTAUTH_AUTHELIA_HEADER_EMAIL")
+	viper.BindEnv("authelia.header_name", "ELASTAUTH_AUTHELIA_HEADER_NAME")
+	
+	// Legacy header configuration (for backward compatibility)
+	viper.BindEnv("headers_username", "ELASTAUTH_HEADERS_USERNAME")
+	viper.BindEnv("headers_groups", "ELASTAUTH_HEADERS_GROUPS")
+	viper.BindEnv("headers_email", "ELASTAUTH_HEADERS_EMAIL")
+	viper.BindEnv("headers_name", "ELASTAUTH_HEADERS_NAME")
+	
+	// OIDC provider configuration
+	viper.BindEnv("oidc.issuer", "ELASTAUTH_OIDC_ISSUER")
+	viper.BindEnv("oidc.client_id", "ELASTAUTH_OIDC_CLIENT_ID")
+	viper.BindEnv("oidc.client_secret", "ELASTAUTH_OIDC_CLIENT_SECRET")
+	viper.BindEnv("oidc.authorization_endpoint", "ELASTAUTH_OIDC_AUTHORIZATION_ENDPOINT")
+	viper.BindEnv("oidc.token_endpoint", "ELASTAUTH_OIDC_TOKEN_ENDPOINT")
+	viper.BindEnv("oidc.userinfo_endpoint", "ELASTAUTH_OIDC_USERINFO_ENDPOINT")
+	viper.BindEnv("oidc.jwks_uri", "ELASTAUTH_OIDC_JWKS_URI")
+	viper.BindEnv("oidc.client_auth_method", "ELASTAUTH_OIDC_CLIENT_AUTH_METHOD")
+	viper.BindEnv("oidc.token_validation", "ELASTAUTH_OIDC_TOKEN_VALIDATION")
+	viper.BindEnv("oidc.use_pkce", "ELASTAUTH_OIDC_USE_PKCE")
+	
+	// OIDC claim mappings
+	viper.BindEnv("oidc.claim_mappings.username", "ELASTAUTH_OIDC_CLAIM_MAPPINGS_USERNAME")
+	viper.BindEnv("oidc.claim_mappings.email", "ELASTAUTH_OIDC_CLAIM_MAPPINGS_EMAIL")
+	viper.BindEnv("oidc.claim_mappings.groups", "ELASTAUTH_OIDC_CLAIM_MAPPINGS_GROUPS")
+	viper.BindEnv("oidc.claim_mappings.full_name", "ELASTAUTH_OIDC_CLAIM_MAPPINGS_FULL_NAME")
+	
+	// OIDC scopes (special handling for string slice)
+	bindOIDCScopesEnvironmentVariable()
+	
+	// OIDC custom headers (special handling for map[string]string)
+	bindOIDCCustomHeadersEnvironmentVariables()
+	
+	// Casdoor provider configuration
+	viper.BindEnv("casdoor.endpoint", "ELASTAUTH_CASDOOR_ENDPOINT")
+	viper.BindEnv("casdoor.client_id", "ELASTAUTH_CASDOOR_CLIENT_ID")
+	viper.BindEnv("casdoor.client_secret", "ELASTAUTH_CASDOOR_CLIENT_SECRET")
+	viper.BindEnv("casdoor.organization", "ELASTAUTH_CASDOOR_ORGANIZATION")
+	viper.BindEnv("casdoor.application", "ELASTAUTH_CASDOOR_APPLICATION")
+	
+	// Logging and metrics
+	viper.BindEnv("log_level", "ELASTAUTH_LOG_LEVEL")
+	viper.BindEnv("log_format", "ELASTAUTH_LOG_FORMAT")
+	viper.BindEnv("enable_metrics", "ELASTAUTH_ENABLE_METRICS")
+	viper.BindEnv("enableOtel", "ELASTAUTH_ENABLE_OTEL")
+}
+
+// bindOIDCScopesEnvironmentVariable handles the special case of OIDC scopes which is a string slice
+func bindOIDCScopesEnvironmentVariable() {
+	// Check if OIDC scopes are provided via environment variable
+	if scopesEnv := os.Getenv("ELASTAUTH_OIDC_SCOPES"); scopesEnv != "" {
+		// Split comma-separated scopes
+		scopes := strings.Split(scopesEnv, ",")
+		// Trim whitespace from each scope
+		for i, scope := range scopes {
+			scopes[i] = strings.TrimSpace(scope)
+		}
+		viper.Set("oidc.scopes", scopes)
 	}
+}
 
-	return nil
+// bindOIDCCustomHeadersEnvironmentVariables handles OIDC custom headers from environment variables
+// Custom headers can be set using ELASTAUTH_OIDC_CUSTOM_HEADERS_<HEADER_NAME> format
+// For example: ELASTAUTH_OIDC_CUSTOM_HEADERS_X_CUSTOM_HEADER=value
+func bindOIDCCustomHeadersEnvironmentVariables() {
+	customHeaders := make(map[string]string)
+	
+	// Scan all environment variables for OIDC custom headers
+	for _, env := range os.Environ() {
+		pair := strings.SplitN(env, "=", 2)
+		if len(pair) != 2 {
+			continue
+		}
+		
+		key := pair[0]
+		value := pair[1]
+		
+		// Check if this is an OIDC custom header environment variable
+		if strings.HasPrefix(key, "ELASTAUTH_OIDC_CUSTOM_HEADERS_") {
+			// Extract the header name from the environment variable name
+			headerName := strings.TrimPrefix(key, "ELASTAUTH_OIDC_CUSTOM_HEADERS_")
+			// Convert underscores back to hyphens for HTTP header names
+			headerName = strings.ReplaceAll(headerName, "_", "-")
+			customHeaders[headerName] = value
+		}
+	}
+	
+	// Set the custom headers in viper if any were found
+	if len(customHeaders) > 0 {
+		viper.Set("oidc.custom_headers", customHeaders)
+	}
+}
+
+// GetSupportedEnvironmentVariables returns a list of all supported environment variables
+// This is useful for documentation and validation purposes
+func GetSupportedEnvironmentVariables() []string {
+	return []string{
+		// Core configuration
+		"ELASTAUTH_AUTH_PROVIDER",
+		"ELASTAUTH_SECRET_KEY",
+		"ELASTAUTH_ELASTICSEARCH_HOST",
+		"ELASTAUTH_ELASTICSEARCH_USERNAME", 
+		"ELASTAUTH_ELASTICSEARCH_PASSWORD",
+		"ELASTAUTH_ELASTICSEARCH_DRY_RUN",
+		
+		// Cache configuration
+		"ELASTAUTH_CACHE_TYPE",
+		"ELASTAUTH_CACHE_EXPIRATION",
+		"ELASTAUTH_CACHE_REDIS_HOST",
+		"ELASTAUTH_CACHE_REDIS_DB",
+		"ELASTAUTH_CACHE_PATH",
+		
+		// Authelia provider configuration
+		"ELASTAUTH_AUTHELIA_HEADER_USERNAME",
+		"ELASTAUTH_AUTHELIA_HEADER_GROUPS",
+		"ELASTAUTH_AUTHELIA_HEADER_EMAIL",
+		"ELASTAUTH_AUTHELIA_HEADER_NAME",
+		
+		// Legacy header configuration (backward compatibility)
+		"ELASTAUTH_HEADERS_USERNAME",
+		"ELASTAUTH_HEADERS_GROUPS",
+		"ELASTAUTH_HEADERS_EMAIL",
+		"ELASTAUTH_HEADERS_NAME",
+		
+		// OIDC provider configuration
+		"ELASTAUTH_OIDC_ISSUER",
+		"ELASTAUTH_OIDC_CLIENT_ID",
+		"ELASTAUTH_OIDC_CLIENT_SECRET",
+		"ELASTAUTH_OIDC_AUTHORIZATION_ENDPOINT",
+		"ELASTAUTH_OIDC_TOKEN_ENDPOINT",
+		"ELASTAUTH_OIDC_USERINFO_ENDPOINT",
+		"ELASTAUTH_OIDC_JWKS_URI",
+		"ELASTAUTH_OIDC_CLIENT_AUTH_METHOD",
+		"ELASTAUTH_OIDC_TOKEN_VALIDATION",
+		"ELASTAUTH_OIDC_USE_PKCE",
+		"ELASTAUTH_OIDC_SCOPES", // Comma-separated list
+		
+		// OIDC claim mappings
+		"ELASTAUTH_OIDC_CLAIM_MAPPINGS_USERNAME",
+		"ELASTAUTH_OIDC_CLAIM_MAPPINGS_EMAIL",
+		"ELASTAUTH_OIDC_CLAIM_MAPPINGS_GROUPS",
+		"ELASTAUTH_OIDC_CLAIM_MAPPINGS_FULL_NAME",
+		
+		// OIDC custom headers (pattern: ELASTAUTH_OIDC_CUSTOM_HEADERS_<HEADER_NAME>)
+		// Example: ELASTAUTH_OIDC_CUSTOM_HEADERS_X_CUSTOM_HEADER
+		
+		// Casdoor provider configuration
+		"ELASTAUTH_CASDOOR_ENDPOINT",
+		"ELASTAUTH_CASDOOR_CLIENT_ID",
+		"ELASTAUTH_CASDOOR_CLIENT_SECRET",
+		"ELASTAUTH_CASDOOR_ORGANIZATION",
+		"ELASTAUTH_CASDOOR_APPLICATION",
+		
+		// Logging and metrics
+		"ELASTAUTH_LOG_LEVEL",
+		"ELASTAUTH_LOG_FORMAT",
+		"ELASTAUTH_ENABLE_METRICS",
+		"ELASTAUTH_ENABLE_OTEL",
+	}
 }
 
 // HandleSecretKey manages the encryption secret key configuration.

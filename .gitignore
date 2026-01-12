@@ -224,3 +224,9 @@ test_headers.txt
 cookie-jar.txt
 **/.envrc
 coverage.out
+
+.spec-workflow
+.qwen
+.zencoder
+.kiro
+.serena

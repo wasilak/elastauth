@@ -224,6 +224,39 @@ func ValidateProviderConfiguration(ctx context.Context) error {
 		return fmt.Errorf("invalid auth_provider: %s (must be one of: authelia, casdoor, oidc)", authProvider)
 	}
 
+	// Validate that exactly one provider is configured by checking for conflicting explicit configuration
+	// We only check for explicit configuration that conflicts with the selected provider
+	
+	// Count how many providers have explicit configuration beyond defaults
+	explicitProviders := []string{}
+	
+	// Check if user explicitly configured a different provider than what's selected
+	if authProvider != "authelia" {
+		// Check if Authelia is explicitly configured when another provider is selected
+		if hasExplicitAutheliaConfig() {
+			explicitProviders = append(explicitProviders, "authelia")
+		}
+	}
+	
+	if authProvider != "casdoor" {
+		// Check if Casdoor is explicitly configured when another provider is selected
+		if hasExplicitCasdoorConfig() {
+			explicitProviders = append(explicitProviders, "casdoor")
+		}
+	}
+	
+	if authProvider != "oidc" {
+		// Check if OIDC is explicitly configured when another provider is selected
+		if hasExplicitOIDCConfig() {
+			explicitProviders = append(explicitProviders, "oidc")
+		}
+	}
+	
+	// If there are conflicting explicit configurations, return error
+	if len(explicitProviders) > 0 {
+		return fmt.Errorf("auth_provider is set to '%s' but explicit configuration found for: %v. Only configure the selected provider", authProvider, explicitProviders)
+	}
+
 	// Validate provider-specific configuration
 	switch authProvider {
 	case "authelia":
@@ -235,6 +268,27 @@ func ValidateProviderConfiguration(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+// hasExplicitAutheliaConfig checks if user has explicitly configured Authelia beyond defaults
+func hasExplicitAutheliaConfig() bool {
+	// Check for explicit Authelia configuration that differs from defaults
+	return viper.IsSet("authelia.header_username") && viper.GetString("authelia.header_username") != "Remote-User" ||
+		   viper.IsSet("authelia.header_groups") && viper.GetString("authelia.header_groups") != "Remote-Groups" ||
+		   viper.IsSet("authelia.header_email") && viper.GetString("authelia.header_email") != "Remote-Email" ||
+		   viper.IsSet("authelia.header_name") && viper.GetString("authelia.header_name") != "Remote-Name"
+}
+
+// hasExplicitCasdoorConfig checks if user has explicitly configured Casdoor
+func hasExplicitCasdoorConfig() bool {
+	// Casdoor requires explicit configuration - no defaults that would work
+	return viper.IsSet("casdoor.endpoint") || viper.IsSet("casdoor.client_id") || viper.IsSet("casdoor.client_secret")
+}
+
+// hasExplicitOIDCConfig checks if user has explicitly configured OIDC
+func hasExplicitOIDCConfig() bool {
+	// OIDC requires explicit configuration - no defaults that would work
+	return viper.IsSet("oidc.issuer") || viper.IsSet("oidc.client_id") || viper.IsSet("oidc.client_secret")
 }
 
 // ValidateAutheliaConfiguration validates Authelia provider configuration.

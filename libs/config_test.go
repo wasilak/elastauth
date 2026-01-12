@@ -148,6 +148,82 @@ func TestValidateProviderConfiguration_InvalidProvider(t *testing.T) {
 	assert.Contains(t, err.Error(), "invalid auth_provider: invalid_provider")
 }
 
+func TestValidateProviderConfiguration_ConflictingConfiguration(t *testing.T) {
+	// Setup: Select OIDC but configure Casdoor
+	viper.Reset()
+	viper.Set("auth_provider", "oidc")
+	viper.Set("casdoor.endpoint", "https://casdoor.example.com")
+	viper.Set("casdoor.client_id", "test-client")
+	
+	ctx := context.Background()
+	err := ValidateProviderConfiguration(ctx)
+	
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "auth_provider is set to 'oidc' but explicit configuration found for: [casdoor]")
+}
+
+func TestValidateProviderConfiguration_MultipleProvidersConfigured(t *testing.T) {
+	// Setup: Configure both OIDC and Casdoor explicitly
+	viper.Reset()
+	viper.Set("auth_provider", "oidc")
+	viper.Set("oidc.issuer", "https://oidc.example.com")
+	viper.Set("casdoor.endpoint", "https://casdoor.example.com")
+	viper.Set("casdoor.client_id", "test-client")
+	
+	ctx := context.Background()
+	err := ValidateProviderConfiguration(ctx)
+	
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "explicit configuration found for: [casdoor]")
+}
+
+func TestValidateProviderConfiguration_ValidOIDCSelection(t *testing.T) {
+	// Setup: Select OIDC and configure OIDC properly
+	viper.Reset()
+	viper.Set("auth_provider", "oidc")
+	viper.Set("oidc.issuer", "https://oidc.example.com")
+	viper.Set("oidc.client_id", "test-client")
+	viper.Set("oidc.client_secret", "test-secret")
+	viper.Set("oidc.scopes", []string{"openid", "profile", "email"})
+	viper.Set("oidc.claim_mappings.username", "preferred_username")
+	viper.Set("oidc.claim_mappings.email", "email")
+	viper.Set("oidc.claim_mappings.groups", "groups")
+	viper.Set("oidc.claim_mappings.full_name", "name")
+	
+	ctx := context.Background()
+	err := ValidateProviderConfiguration(ctx)
+	
+	assert.NoError(t, err)
+	assert.Equal(t, "oidc", viper.GetString("auth_provider"))
+}
+
+func TestValidateProviderConfiguration_ValidCasdoorSelection(t *testing.T) {
+	// Setup: Select Casdoor and configure Casdoor properly
+	viper.Reset()
+	viper.Set("auth_provider", "casdoor")
+	viper.Set("casdoor.endpoint", "https://casdoor.example.com")
+	viper.Set("casdoor.client_id", "test-client")
+	viper.Set("casdoor.client_secret", "test-secret")
+	
+	ctx := context.Background()
+	err := ValidateProviderConfiguration(ctx)
+	
+	assert.NoError(t, err)
+	assert.Equal(t, "casdoor", viper.GetString("auth_provider"))
+}
+
+func TestValidateProviderConfiguration_AutheliaWithDefaults(t *testing.T) {
+	// Setup: Select Authelia with default configuration (should work)
+	viper.Reset()
+	viper.Set("auth_provider", "authelia")
+	
+	ctx := context.Background()
+	err := ValidateProviderConfiguration(ctx)
+	
+	assert.NoError(t, err)
+	assert.Equal(t, "authelia", viper.GetString("auth_provider"))
+}
+
 func TestGetEffectiveOIDCConfig(t *testing.T) {
 	// Setup OIDC configuration
 	viper.Reset()

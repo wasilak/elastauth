@@ -49,7 +49,7 @@ func InitConfiguration() error {
 
 	viper.SetDefault("headers_username", "Remote-User")
 	viper.SetDefault("headers_groups", "Remote-Groups")
-	viper.SetDefault("headers_Email", "Remote-Email")
+	viper.SetDefault("headers_email", "Remote-Email")
 	viper.SetDefault("headers_name", "Remote-Name")
 
 	viper.SetDefault("enable_metrics", false)

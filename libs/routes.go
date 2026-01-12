@@ -2,13 +2,15 @@ package libs
 
 import (
 	"encoding/base64"
-	"errors"
 	"log/slog"
 	"net/http"
+	"strings"
 
 	"github.com/labstack/echo/v4"
 	"github.com/spf13/viper"
 	"github.com/wasilak/elastauth/cache"
+	"github.com/wasilak/elastauth/provider"
+	_ "github.com/wasilak/elastauth/provider/authelia" // Import to register Authelia provider
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
@@ -52,18 +54,46 @@ type configResponse struct {
 // It extracts user information from request headers, validates input, generates temporary passwords,
 // optionally upserts the user to Elasticsearch, caches encrypted passwords, and returns basic auth credentials.
 // The route supports caching to improve performance on repeated requests for the same user.
+// getAuthProvider returns the configured authentication provider
+// For Phase 1, this defaults to "authelia" for backward compatibility
+func getAuthProvider() (provider.AuthProvider, error) {
+	// For backward compatibility, default to "authelia" provider
+	providerType := viper.GetString("auth_provider")
+	if providerType == "" {
+		providerType = "authelia"
+	}
+	
+	authProvider, err := provider.DefaultFactory.Create(providerType, nil)
+	if err != nil {
+		return nil, err
+	}
+	
+	return authProvider, nil
+}
+
 func MainRoute(c echo.Context) error {
 	tracer := otel.Tracer("MainRoute")
 
 	ctx, spanHeader := tracer.Start(c.Request().Context(), "Getting user information from request")
 
-	spanHeader.AddEvent("Getting username from header")
-	headerName := viper.GetString("headers_username")
-	user := c.Request().Header.Get(headerName)
+	spanHeader.AddEvent("Getting auth provider")
+	authProvider, err := getAuthProvider()
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to get auth provider", slog.String("error", err.Error()))
+		spanHeader.RecordError(err)
+		spanHeader.SetStatus(codes.Error, err.Error())
+		response := ErrorResponse{
+			Message: "Internal server error",
+			Code:    http.StatusInternalServerError,
+		}
+		return c.JSON(http.StatusInternalServerError, response)
+	}
 
-	if len(user) == 0 {
-		err := errors.New("Header not provided: " + headerName)
-		slog.ErrorContext(ctx, err.Error())
+	spanHeader.AddEvent("Extracting user information from provider")
+	authRequest := &provider.AuthRequest{Request: c.Request()}
+	userInfo, err := authProvider.GetUser(ctx, authRequest)
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to get user from provider", slog.String("error", err.Error()))
 		spanHeader.RecordError(err)
 		spanHeader.SetStatus(codes.Error, err.Error())
 		response := ErrorResponse{
@@ -73,6 +103,7 @@ func MainRoute(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, response)
 	}
 
+	user := userInfo.Username
 	if err := ValidateUsername(user); err != nil {
 		slog.ErrorContext(ctx, "Invalid username format", slog.String("error", err.Error()))
 		spanHeader.RecordError(err)
@@ -85,15 +116,14 @@ func MainRoute(c echo.Context) error {
 	}
 	spanHeader.End()
 
-	headerName = viper.GetString("headers_groups")
-	groupsHeader := c.Request().Header.Get(headerName)
+	// Validate groups using existing validation logic
 	enableGroupWhitelist := viper.GetBool("enable_group_whitelist")
 	var groupWhitelist []string
 	if enableGroupWhitelist {
 		groupWhitelist = viper.GetStringSlice("group_whitelist")
 	}
 
-	userGroups, err := ParseAndValidateGroups(groupsHeader, enableGroupWhitelist, groupWhitelist)
+	userGroups, err := ParseAndValidateGroups(strings.Join(userInfo.Groups, ","), enableGroupWhitelist, groupWhitelist)
 	if err != nil {
 		slog.ErrorContext(ctx, "Invalid group format", slog.String("error", err.Error()))
 		response := ErrorResponse{
@@ -103,8 +133,33 @@ func MainRoute(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, response)
 	}
 
-	if len(userGroups) == 0 && len(groupsHeader) == 0 {
-		slog.DebugContext(ctx, "No groups provided in header")
+	if len(userGroups) == 0 && len(userInfo.Groups) == 0 {
+		slog.DebugContext(ctx, "No groups provided by provider")
+	}
+
+	// Validate email and name from provider
+	userEmail := userInfo.Email
+	if len(userEmail) > 0 {
+		if err := ValidateEmail(userEmail); err != nil {
+			slog.ErrorContext(ctx, "Invalid email format", slog.String("error", err.Error()))
+			response := ErrorResponse{
+				Message: err.Error(),
+				Code:    http.StatusBadRequest,
+			}
+			return c.JSON(http.StatusBadRequest, response)
+		}
+	}
+
+	userName := userInfo.FullName
+	if len(userName) > 0 {
+		if err := ValidateName(userName); err != nil {
+			slog.ErrorContext(ctx, "Invalid name format", slog.String("error", err.Error()))
+			response := ErrorResponse{
+				Message: err.Error(),
+				Code:    http.StatusBadRequest,
+			}
+			return c.JSON(http.StatusBadRequest, response)
+		}
 	}
 
 	ctx, spanCacheGet := tracer.Start(ctx, "cache get")
@@ -128,30 +183,6 @@ func MainRoute(c echo.Context) error {
 		ctx, spanCacheMiss := tracer.Start(ctx, "user access regeneration")
 
 		roles := GetUserRoles(ctx, userGroups)
-
-		userEmail := c.Request().Header.Get(viper.GetString("headers_email"))
-		if len(userEmail) > 0 {
-			if err := ValidateEmail(userEmail); err != nil {
-				slog.ErrorContext(ctx, "Invalid email format", slog.String("error", err.Error()))
-				response := ErrorResponse{
-					Message: err.Error(),
-					Code:    http.StatusBadRequest,
-				}
-				return c.JSON(http.StatusBadRequest, response)
-			}
-		}
-
-		userName := c.Request().Header.Get(viper.GetString("headers_name"))
-		if len(userName) > 0 {
-			if err := ValidateName(userName); err != nil {
-				slog.ErrorContext(ctx, "Invalid name format", slog.String("error", err.Error()))
-				response := ErrorResponse{
-					Message: err.Error(),
-					Code:    http.StatusBadRequest,
-				}
-				return c.JSON(http.StatusBadRequest, response)
-			}
-		}
 
 		spanCacheMiss.SetAttributes(attribute.String("userEmail", userEmail))
 		spanCacheMiss.SetAttributes(attribute.String("userName", userName))

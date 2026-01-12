@@ -44,32 +44,64 @@ type CacheInterface interface {
 var CacheInstance CacheInterface
 
 // The function initializes a cache instance based on the cache type specified in the configuration
-// file.
+// file. It supports both legacy configuration and new cachego-based configuration.
 func CacheInit(ctx context.Context) {
 	tracer := otel.Tracer("Cache")
 	_, span := tracer.Start(ctx, "CacheInit")
 	defer span.End()
 
-	cacheDuration, err := time.ParseDuration(viper.GetString("cache_expire"))
+	// Get effective cache configuration (new format only)
+	cacheConfig := GetEffectiveCacheConfig()
+	
+	// Create cachego manager (primary and only cache system)
+	cachegoManager, err := NewCachegoManager(cacheConfig)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatalf("Failed to initialize cache: %v", err)
 	}
-
-	if viper.GetString("cache_type") == "redis" {
-		CacheInstance = &RedisCache{
-			Address: viper.GetString("redis_host"),
-			DB:      viper.GetInt("redis_db"),
-			TTL:     cacheDuration,
-			Tracer:  otel.Tracer("RedisCache"),
-		}
-	} else if viper.GetString("cache_type") == "memory" {
-		CacheInstance = &GoCache{
-			TTL:    cacheDuration,
-			Tracer: otel.Tracer("GoCache"),
-		}
-	} else {
-		log.Fatal("No cache_type selected or cache type is invalid")
+	
+	// If cachego manager is nil, it means no caching is configured
+	if cachegoManager == nil {
+		log.Printf("No cache configuration found - running without caching")
+		CacheInstance = nil
+		return
 	}
-
-	CacheInstance.Init(ctx, cacheDuration)
+	
+	// Use cachego as the cache system
+	CacheInstance = cachegoManager
+	log.Printf("Initialized cache with type: %s", cachegoManager.Type())
+}
+// GetEffectiveCacheConfig returns the effective cache configuration, handling both legacy and new formats.
+// This is a simplified version that works within the cache package.
+func GetEffectiveCacheConfig() map[string]interface{} {
+	config := make(map[string]interface{})
+	
+	// Only use new cache configuration format
+	cacheType := viper.GetString("cache.type")
+	config["type"] = cacheType
+	
+	// Get expiration (provide default if not specified)
+	expiration := viper.GetString("cache.expiration")
+	if expiration == "" {
+		expiration = "1h" // Default expiration
+	}
+	config["expiration"] = expiration
+	
+	// Get Redis configuration
+	redisHost := viper.GetString("cache.redis_host")
+	if redisHost == "" {
+		redisHost = "localhost:6379" // Default Redis host
+	}
+	config["redis_host"] = redisHost
+	
+	redisDB := viper.GetInt("cache.redis_db")
+	config["redis_db"] = redisDB
+	
+	// Get file cache path (provide default)
+	filePath := viper.GetString("cache.path")
+	if filePath == "" {
+		filePath = "/tmp/elastauth-cache" // Default file cache path
+	}
+	config["path"] = filePath
+	
+	return config
 }

@@ -1,10 +1,12 @@
 package libs
 
 import (
+	"context"
 	"encoding/base64"
 	"log/slog"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/labstack/echo/v4"
 	"github.com/spf13/viper"
@@ -36,6 +38,52 @@ type ErrorResponse struct {
 	Code    int    `json:"code"`
 }
 
+// isCacheEnabled returns true if caching is enabled and available.
+func isCacheEnabled() bool {
+	return cache.CacheInstance != nil
+}
+
+// getCachedItem retrieves an item from cache if caching is enabled.
+// Returns the item and whether it exists.
+func getCachedItem(ctx context.Context, cacheKey string) (interface{}, bool) {
+	if !isCacheEnabled() {
+		return nil, false
+	}
+	return cache.CacheInstance.Get(ctx, cacheKey)
+}
+
+// setCachedItem stores an item in cache if caching is enabled.
+func setCachedItem(ctx context.Context, cacheKey string, item interface{}) {
+	if !isCacheEnabled() {
+		return
+	}
+	cache.CacheInstance.Set(ctx, cacheKey, item)
+}
+
+// getCachedItemTTL returns the TTL of a cached item if caching is enabled.
+func getCachedItemTTL(ctx context.Context, cacheKey string) (time.Duration, bool) {
+	if !isCacheEnabled() {
+		return 0, false
+	}
+	return cache.CacheInstance.GetItemTTL(ctx, cacheKey)
+}
+
+// getCacheTTL returns the default cache TTL if caching is enabled.
+func getCacheTTL(ctx context.Context) time.Duration {
+	if !isCacheEnabled() {
+		return 0
+	}
+	return cache.CacheInstance.GetTTL(ctx)
+}
+
+// extendCachedItemTTL extends the TTL of a cached item if caching is enabled.
+func extendCachedItemTTL(ctx context.Context, cacheKey string, item interface{}) {
+	if !isCacheEnabled() {
+		return
+	}
+	cache.CacheInstance.ExtendTTL(ctx, cacheKey, item)
+}
+
 // The configResponse type contains default roles and group mappings in a map format.
 // @property {[]string} DefaultRoles - DefaultRoles is a property of the configResponse struct that is
 // a slice of strings representing the default roles assigned to users who do not have any specific
@@ -46,8 +94,11 @@ type ErrorResponse struct {
 // the map represents a group, and the corresponding value is a slice of roles that are associated with
 // that
 type configResponse struct {
-	DefaultRoles  []string            `json:"default_roles"`
-	GroupMappings map[string][]string `json:"group_mappings"`
+	AuthProvider    string                 `json:"auth_provider"`
+	Cache           map[string]interface{} `json:"cache"`
+	DefaultRoles    []string               `json:"default_roles"`
+	GroupMappings   map[string][]string    `json:"group_mappings"`
+	ProviderConfig  map[string]interface{} `json:"provider_config"`
 }
 
 // MainRoute is the main authentication handler that processes user authentication requests.
@@ -170,7 +221,7 @@ func MainRoute(c echo.Context) error {
 	key := viper.GetString("secret_key")
 
 	spanCacheGet.AddEvent("Getting password from cache")
-	encryptedPasswordBase64, exists := cache.CacheInstance.Get(ctx, cacheKey)
+	encryptedPasswordBase64, exists := getCachedItem(ctx, cacheKey)
 
 	if exists {
 		slog.DebugContext(ctx, "Cache hit", slog.String("cacheKey", cacheKey))
@@ -248,18 +299,18 @@ func MainRoute(c echo.Context) error {
 		}
 
 		spanCacheMiss.AddEvent("Setting cache item")
-		cache.CacheInstance.Set(ctx, cacheKey, encryptedPasswordBase64)
+		setCachedItem(ctx, cacheKey, encryptedPasswordBase64)
 		spanCacheMiss.End()
 	}
 
 	ctx, spanItemCache := tracer.Start(ctx, "handling item cache")
 	spanItemCache.SetAttributes(attribute.String("cacheKey", cacheKey))
 
-	itemCacheDuration, _ := cache.CacheInstance.GetItemTTL(ctx, cacheKey)
+	itemCacheDuration, _ := getCachedItemTTL(ctx, cacheKey)
 
-	if viper.GetBool("extend_cache") && itemCacheDuration > 0 && itemCacheDuration < cache.CacheInstance.GetTTL(ctx) {
-		slog.DebugContext(ctx, "Extending cache TTL", slog.String("user", user), slog.Duration("currentTTL", itemCacheDuration), slog.String("configuredTTL", viper.GetString("cache_expire")))
-		cache.CacheInstance.ExtendTTL(ctx, cacheKey, encryptedPasswordBase64)
+	if viper.GetBool("extend_cache") && itemCacheDuration > 0 && itemCacheDuration < getCacheTTL(ctx) {
+		slog.DebugContext(ctx, "Extending cache TTL", slog.String("user", user), slog.Duration("currentTTL", itemCacheDuration), slog.String("configuredTTL", viper.GetString("cache.expiration")))
+		extendCachedItemTTL(ctx, cacheKey, encryptedPasswordBase64)
 	}
 	spanItemCache.End()
 
@@ -311,9 +362,53 @@ func ConfigRoute(c echo.Context) error {
 	_, span := tracer.Start(c.Request().Context(), "response")
 	defer span.End()
 
+	// Get effective auth provider
+	authProvider := viper.GetString("auth_provider")
+	if authProvider == "" {
+		authProvider = "authelia"
+	}
+
+	// Get effective cache configuration
+	cacheConfig := GetEffectiveCacheConfig()
+	
+	// Mask sensitive cache values
+	maskedCacheConfig := make(map[string]interface{})
+	for key, value := range cacheConfig {
+		if IsSensitiveField(key) {
+			maskedCacheConfig[key] = "***"
+		} else {
+			maskedCacheConfig[key] = value
+		}
+	}
+
+	// Get provider-specific configuration
+	var providerConfig map[string]interface{}
+	switch authProvider {
+	case "authelia":
+		providerConfig = GetEffectiveAutheliaConfig()
+	case "casdoor":
+		providerConfig = map[string]interface{}{
+			"endpoint":      viper.GetString("casdoor.endpoint"),
+			"client_id":     viper.GetString("casdoor.client_id"),
+			"client_secret": "***", // Always mask secrets
+		}
+	case "oidc":
+		providerConfig = map[string]interface{}{
+			"issuer":        viper.GetString("oidc.issuer"),
+			"client_id":     viper.GetString("oidc.client_id"),
+			"client_secret": "***", // Always mask secrets
+			"claim_mappings": viper.GetStringMapString("oidc.claim_mappings"),
+		}
+	default:
+		providerConfig = make(map[string]interface{})
+	}
+
 	response := configResponse{
-		DefaultRoles:  viper.GetStringSlice("default_roles"),
-		GroupMappings: viper.GetStringMapStringSlice("group_mappings"),
+		AuthProvider:   authProvider,
+		Cache:          maskedCacheConfig,
+		DefaultRoles:   viper.GetStringSlice("default_roles"),
+		GroupMappings:  viper.GetStringMapStringSlice("group_mappings"),
+		ProviderConfig: providerConfig,
 	}
 	return c.JSON(http.StatusOK, response)
 }

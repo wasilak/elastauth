@@ -1,19 +1,18 @@
 package libs
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
-	"time"
 
 	"github.com/labstack/echo/v4"
-	gocache "github.com/patrickmn/go-cache"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
 	"github.com/wasilak/elastauth/cache"
-	"go.opentelemetry.io/otel"
 )
 
 func TestHealthRoute(t *testing.T) {
@@ -49,12 +48,39 @@ func TestConfigRoute(t *testing.T) {
 	}
 	viper.Set("group_mappings", viperMappingsMock)
 
-	response := "{\"default_roles\":[\"your_default_kibana_role\"],\"group_mappings\":{\"your_ad_group\":[\"your_kibana_role\"]}}\n"
-
 	// Assertions
 	if assert.NoError(t, ConfigRoute(c)) {
 		assert.Equal(t, http.StatusOK, rec.Code)
-		assert.Equal(t, response, rec.Body.String())
+		
+		// Parse the actual JSON response
+		var actualJSON map[string]interface{}
+		err := json.Unmarshal(rec.Body.Bytes(), &actualJSON)
+		assert.NoError(t, err)
+		
+		// Check that all expected fields are present
+		assert.Contains(t, actualJSON, "auth_provider")
+		assert.Contains(t, actualJSON, "cache")
+		assert.Contains(t, actualJSON, "default_roles")
+		assert.Contains(t, actualJSON, "group_mappings")
+		assert.Contains(t, actualJSON, "provider_config")
+		
+		// Check specific values that we set
+		assert.Equal(t, "authelia", actualJSON["auth_provider"])
+		
+		// Check default_roles (convert from []interface{} to []string for comparison)
+		defaultRoles, ok := actualJSON["default_roles"].([]interface{})
+		assert.True(t, ok)
+		assert.Len(t, defaultRoles, 1)
+		assert.Equal(t, "your_default_kibana_role", defaultRoles[0])
+		
+		// Check group_mappings structure
+		groupMappings, ok := actualJSON["group_mappings"].(map[string]interface{})
+		assert.True(t, ok)
+		assert.Contains(t, groupMappings, "your_ad_group")
+		
+		// Check that cache and provider_config are maps
+		assert.IsType(t, map[string]interface{}{}, actualJSON["cache"])
+		assert.IsType(t, map[string]interface{}{}, actualJSON["provider_config"])
 	}
 }
 
@@ -65,11 +91,13 @@ func generateTestKey() string {
 }
 
 func setupTestCache(t *testing.T) {
-	cache.CacheInstance = &cache.GoCache{
-		Cache:  gocache.New(1*time.Hour, 2*time.Hour),
-		TTL:    1 * time.Hour,
-		Tracer: otel.Tracer("test"),
-	}
+	// Set up memory cache configuration
+	viper.Set("cache.type", "memory")
+	viper.Set("cache.expiration", "1h")
+	
+	// Initialize cache using new system
+	ctx := context.Background()
+	cache.CacheInit(ctx)
 }
 
 func TestMainRoute_ValidRequest_ValidationPasses(t *testing.T) {

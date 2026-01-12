@@ -51,6 +51,153 @@ func TestValidateSecretKey_TooShort(t *testing.T) {
 	assert.Contains(t, err.Error(), "32 bytes")
 }
 
+func TestValidateOIDCConfiguration_Valid(t *testing.T) {
+	// Setup valid OIDC configuration
+	viper.Reset()
+	viper.Set("oidc.issuer", "https://auth.example.com")
+	viper.Set("oidc.client_id", "test-client")
+	viper.Set("oidc.client_secret", "test-secret")
+	viper.Set("oidc.scopes", []string{"openid", "profile", "email"})
+	viper.Set("oidc.client_auth_method", "client_secret_basic")
+	viper.Set("oidc.token_validation", "jwks")
+	viper.Set("oidc.claim_mappings.username", "preferred_username")
+	viper.Set("oidc.claim_mappings.email", "email")
+	viper.Set("oidc.claim_mappings.groups", "groups")
+	viper.Set("oidc.claim_mappings.full_name", "name")
+
+	ctx := context.Background()
+	err := ValidateOIDCConfiguration(ctx)
+
+	assert.NoError(t, err)
+}
+
+func TestValidateOIDCConfiguration_MissingRequired(t *testing.T) {
+	// Setup incomplete OIDC configuration
+	viper.Reset()
+	viper.Set("oidc.client_id", "test-client")
+	// Missing issuer and client_secret
+
+	ctx := context.Background()
+	err := ValidateOIDCConfiguration(ctx)
+
+	assert.Error(t, err)
+	// The error message will mention the first missing required field
+	assert.Contains(t, err.Error(), "oidc provider requires")
+}
+
+func TestValidateOIDCConfiguration_InvalidAuthMethod(t *testing.T) {
+	// Setup OIDC configuration with invalid auth method
+	viper.Reset()
+	viper.Set("oidc.issuer", "https://auth.example.com")
+	viper.Set("oidc.client_id", "test-client")
+	viper.Set("oidc.client_secret", "test-secret")
+	viper.Set("oidc.client_auth_method", "invalid_method")
+	viper.Set("oidc.scopes", []string{"openid"})
+	viper.Set("oidc.claim_mappings.username", "preferred_username")
+	viper.Set("oidc.claim_mappings.email", "email")
+	viper.Set("oidc.claim_mappings.groups", "groups")
+	viper.Set("oidc.claim_mappings.full_name", "name")
+
+	ctx := context.Background()
+	err := ValidateOIDCConfiguration(ctx)
+
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid oidc.client_auth_method")
+}
+
+func TestValidateOIDCConfiguration_InvalidTokenValidation(t *testing.T) {
+	// Setup OIDC configuration with invalid token validation
+	viper.Reset()
+	viper.Set("oidc.issuer", "https://auth.example.com")
+	viper.Set("oidc.client_id", "test-client")
+	viper.Set("oidc.client_secret", "test-secret")
+	viper.Set("oidc.token_validation", "invalid_validation")
+	viper.Set("oidc.scopes", []string{"openid"})
+	viper.Set("oidc.claim_mappings.username", "preferred_username")
+	viper.Set("oidc.claim_mappings.email", "email")
+	viper.Set("oidc.claim_mappings.groups", "groups")
+	viper.Set("oidc.claim_mappings.full_name", "name")
+
+	ctx := context.Background()
+	err := ValidateOIDCConfiguration(ctx)
+
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid oidc.token_validation")
+}
+
+func TestValidateProviderConfiguration_DefaultsToAuthelia(t *testing.T) {
+	// Setup configuration without auth_provider
+	viper.Reset()
+	
+	ctx := context.Background()
+	err := ValidateProviderConfiguration(ctx)
+
+	assert.NoError(t, err)
+	assert.Equal(t, "authelia", viper.GetString("auth_provider"))
+}
+
+func TestValidateProviderConfiguration_InvalidProvider(t *testing.T) {
+	// Setup configuration with invalid provider
+	viper.Reset()
+	viper.Set("auth_provider", "invalid_provider")
+	
+	ctx := context.Background()
+	err := ValidateProviderConfiguration(ctx)
+
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid auth_provider: invalid_provider")
+}
+
+func TestGetEffectiveOIDCConfig(t *testing.T) {
+	// Setup OIDC configuration
+	viper.Reset()
+	viper.Set("oidc.issuer", "https://auth.example.com")
+	viper.Set("oidc.client_id", "test-client")
+	viper.Set("oidc.client_secret", "test-secret")
+	viper.Set("oidc.scopes", []string{"openid", "profile", "email"})
+	viper.Set("oidc.claim_mappings.username", "preferred_username")
+	viper.Set("oidc.claim_mappings.email", "email")
+	// Set custom headers using the proper Viper syntax
+	viper.Set("oidc.custom_headers", map[string]string{"X-Custom": "custom-value"})
+
+	config := GetEffectiveOIDCConfig()
+
+	assert.Equal(t, "https://auth.example.com", config["issuer"])
+	assert.Equal(t, "test-client", config["client_id"])
+	assert.Equal(t, "test-secret", config["client_secret"])
+	assert.Equal(t, []string{"openid", "profile", "email"}, config["scopes"])
+	
+	claimMappings := config["claim_mappings"].(map[string]string)
+	assert.Equal(t, "preferred_username", claimMappings["username"])
+	assert.Equal(t, "email", claimMappings["email"])
+	
+	customHeaders := config["custom_headers"].(map[string]string)
+	assert.Equal(t, "custom-value", customHeaders["X-Custom"])
+}
+
+func TestGetEffectiveProviderConfig(t *testing.T) {
+	// Test with OIDC provider
+	viper.Reset()
+	viper.Set("auth_provider", "oidc")
+	viper.Set("oidc.issuer", "https://auth.example.com")
+	viper.Set("oidc.client_id", "test-client")
+
+	config := GetEffectiveProviderConfig()
+
+	assert.Equal(t, "https://auth.example.com", config["issuer"])
+	assert.Equal(t, "test-client", config["client_id"])
+}
+
+func TestGetEffectiveProviderConfig_DefaultsToAuthelia(t *testing.T) {
+	// Test without auth_provider set
+	viper.Reset()
+	viper.Set("authelia.header_username", "Remote-User")
+
+	config := GetEffectiveProviderConfig()
+
+	assert.Equal(t, "Remote-User", config["header_username"])
+}
+
 func TestValidateSecretKey_TooLong(t *testing.T) {
 	bytes := make([]byte, 64)
 	rand.Read(bytes)
@@ -221,7 +368,7 @@ func TestValidateConfiguration_AllValid(t *testing.T) {
 	viper.Set("elasticsearch_username", "user")
 	viper.Set("elasticsearch_password", "pass")
 	viper.Set("secret_key", generateValidSecretKey())
-	viper.Set("cache_type", "memory")
+	viper.Set("cache.type", "memory")
 	viper.Set("log_level", "info")
 
 	defer func() {
@@ -229,7 +376,7 @@ func TestValidateConfiguration_AllValid(t *testing.T) {
 		viper.Set("elasticsearch_username", "")
 		viper.Set("elasticsearch_password", "")
 		viper.Set("secret_key", "")
-		viper.Set("cache_type", "memory")
+		viper.Set("cache.type", "")
 		viper.Set("log_level", "info")
 	}()
 
@@ -245,8 +392,8 @@ func TestValidateConfiguration_RedisCacheWithoutRedisHost(t *testing.T) {
 	viper.Set("elasticsearch_username", "user")
 	viper.Set("elasticsearch_password", "pass")
 	viper.Set("secret_key", generateValidSecretKey())
-	viper.Set("cache_type", "redis")
-	viper.Set("redis_host", "")
+	viper.Set("cache.type", "redis")
+	viper.Set("cache.redis_host", "")
 	viper.Set("log_level", "info")
 
 	defer func() {
@@ -254,17 +401,15 @@ func TestValidateConfiguration_RedisCacheWithoutRedisHost(t *testing.T) {
 		viper.Set("elasticsearch_username", "")
 		viper.Set("elasticsearch_password", "")
 		viper.Set("secret_key", "")
-		viper.Set("cache_type", "memory")
-		viper.Set("redis_host", "")
+		viper.Set("cache.type", "")
+		viper.Set("cache.redis_host", "")
 		viper.Set("log_level", "info")
 	}()
 
 	err := ValidateConfiguration(ctx)
 
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "redis_host is required")
-	assert.Contains(t, err.Error(), "cache_type is 'redis'")
-	assert.Contains(t, err.Error(), "ELASTAUTH_REDIS_HOST")
+	assert.Contains(t, err.Error(), "redis cache requires cache.redis_host configuration")
 }
 
 func TestValidateConfiguration_RedisCacheWithRedisHost(t *testing.T) {
@@ -274,8 +419,8 @@ func TestValidateConfiguration_RedisCacheWithRedisHost(t *testing.T) {
 	viper.Set("elasticsearch_username", "user")
 	viper.Set("elasticsearch_password", "pass")
 	viper.Set("secret_key", generateValidSecretKey())
-	viper.Set("cache_type", "redis")
-	viper.Set("redis_host", "localhost:6379")
+	viper.Set("cache.type", "redis")
+	viper.Set("cache.redis_host", "localhost:6379")
 	viper.Set("log_level", "info")
 
 	defer func() {
@@ -283,8 +428,8 @@ func TestValidateConfiguration_RedisCacheWithRedisHost(t *testing.T) {
 		viper.Set("elasticsearch_username", "")
 		viper.Set("elasticsearch_password", "")
 		viper.Set("secret_key", "")
-		viper.Set("cache_type", "memory")
-		viper.Set("redis_host", "")
+		viper.Set("cache.type", "")
+		viper.Set("cache.redis_host", "")
 		viper.Set("log_level", "info")
 	}()
 
@@ -300,7 +445,7 @@ func TestValidateConfiguration_InvalidCacheType(t *testing.T) {
 	viper.Set("elasticsearch_username", "user")
 	viper.Set("elasticsearch_password", "pass")
 	viper.Set("secret_key", generateValidSecretKey())
-	viper.Set("cache_type", "memcached")
+	viper.Set("cache.type", "memcached")
 	viper.Set("log_level", "info")
 
 	defer func() {
@@ -308,17 +453,16 @@ func TestValidateConfiguration_InvalidCacheType(t *testing.T) {
 		viper.Set("elasticsearch_username", "")
 		viper.Set("elasticsearch_password", "")
 		viper.Set("secret_key", "")
-		viper.Set("cache_type", "memory")
+		viper.Set("cache.type", "")
 		viper.Set("log_level", "info")
 	}()
 
 	err := ValidateConfiguration(ctx)
 
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "invalid cache_type")
+	assert.Contains(t, err.Error(), "invalid cache type")
 	assert.Contains(t, err.Error(), "memcached")
-	assert.Contains(t, err.Error(), "memory")
-	assert.Contains(t, err.Error(), "redis")
+	assert.Contains(t, err.Error(), "memory, redis, file")
 }
 
 func TestValidateConfiguration_AllValidLogLevels(t *testing.T) {
@@ -331,7 +475,7 @@ func TestValidateConfiguration_AllValidLogLevels(t *testing.T) {
 			viper.Set("elasticsearch_username", "user")
 			viper.Set("elasticsearch_password", "pass")
 			viper.Set("secret_key", generateValidSecretKey())
-			viper.Set("cache_type", "memory")
+			viper.Set("cache.type", "memory")
 			viper.Set("log_level", level)
 
 			defer func() {
@@ -339,7 +483,7 @@ func TestValidateConfiguration_AllValidLogLevels(t *testing.T) {
 				viper.Set("elasticsearch_username", "")
 				viper.Set("elasticsearch_password", "")
 				viper.Set("secret_key", "")
-				viper.Set("cache_type", "memory")
+				viper.Set("cache.type", "")
 				viper.Set("log_level", "info")
 			}()
 
@@ -357,7 +501,7 @@ func TestValidateConfiguration_InvalidLogLevel(t *testing.T) {
 	viper.Set("elasticsearch_username", "user")
 	viper.Set("elasticsearch_password", "pass")
 	viper.Set("secret_key", generateValidSecretKey())
-	viper.Set("cache_type", "memory")
+	viper.Set("cache.type", "memory")
 	viper.Set("log_level", "verbose")
 
 	defer func() {
@@ -365,7 +509,7 @@ func TestValidateConfiguration_InvalidLogLevel(t *testing.T) {
 		viper.Set("elasticsearch_username", "")
 		viper.Set("elasticsearch_password", "")
 		viper.Set("secret_key", "")
-		viper.Set("cache_type", "memory")
+		viper.Set("cache.type", "")
 		viper.Set("log_level", "info")
 	}()
 
@@ -387,7 +531,7 @@ func TestValidateConfiguration_InvalidSecretKey(t *testing.T) {
 	viper.Set("elasticsearch_username", "user")
 	viper.Set("elasticsearch_password", "pass")
 	viper.Set("secret_key", "invalid-key")
-	viper.Set("cache_type", "memory")
+	viper.Set("cache.type", "memory")
 	viper.Set("log_level", "info")
 
 	defer func() {
@@ -395,7 +539,7 @@ func TestValidateConfiguration_InvalidSecretKey(t *testing.T) {
 		viper.Set("elasticsearch_username", "")
 		viper.Set("elasticsearch_password", "")
 		viper.Set("secret_key", "")
-		viper.Set("cache_type", "memory")
+		viper.Set("cache.type", "")
 		viper.Set("log_level", "info")
 	}()
 
@@ -412,7 +556,7 @@ func TestValidateConfiguration_MissingRequiredField(t *testing.T) {
 	viper.Set("elasticsearch_username", "user")
 	viper.Set("elasticsearch_password", "pass")
 	viper.Set("secret_key", generateValidSecretKey())
-	viper.Set("cache_type", "memory")
+	viper.Set("cache.type", "memory")
 	viper.Set("log_level", "info")
 
 	defer func() {
@@ -420,7 +564,7 @@ func TestValidateConfiguration_MissingRequiredField(t *testing.T) {
 		viper.Set("elasticsearch_username", "")
 		viper.Set("elasticsearch_password", "")
 		viper.Set("secret_key", "")
-		viper.Set("cache_type", "memory")
+		viper.Set("cache.type", "")
 		viper.Set("log_level", "info")
 	}()
 

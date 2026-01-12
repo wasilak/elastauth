@@ -9,15 +9,12 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
-	"time"
 
 	"github.com/labstack/echo/v4"
-	gocache "github.com/patrickmn/go-cache"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/wasilak/elastauth/cache"
-	"go.opentelemetry.io/otel"
 )
 
 func generateTestKeyForIntegration() string {
@@ -27,11 +24,13 @@ func generateTestKeyForIntegration() string {
 }
 
 func setupTestCacheForIntegration(t *testing.T) {
-	cache.CacheInstance = &cache.GoCache{
-		Cache:  gocache.New(1*time.Hour, 2*time.Hour),
-		TTL:    1 * time.Hour,
-		Tracer: otel.Tracer("test"),
-	}
+	// Set up memory cache configuration
+	viper.Set("cache.type", "memory")
+	viper.Set("cache.expiration", "1h")
+	
+	// Initialize cache using new system
+	ctx := context.Background()
+	cache.CacheInit(ctx)
 }
 
 func setupElasticsearchMockServer(t *testing.T) *httptest.Server {
@@ -123,11 +122,12 @@ func TestIntegration_CompleteAuthFlow_CacheHit(t *testing.T) {
 	encryptedPasswordBase64 := base64.URLEncoding.EncodeToString([]byte(encryptedPassword))
 	cacheKey := "elastauth-testuser"
 
-	cache.CacheInstance = &cache.GoCache{
-		Cache:  gocache.New(1*time.Hour, 2*time.Hour),
-		TTL:    1 * time.Hour,
-		Tracer: otel.Tracer("test"),
-	}
+	// Set up memory cache configuration
+	viper.Set("cache.type", "memory")
+	viper.Set("cache.expiration", "1h")
+	
+	// Initialize cache using new system
+	cache.CacheInit(ctx)
 	cache.CacheInstance.Set(ctx, cacheKey, encryptedPasswordBase64)
 
 	e := echo.New()
@@ -237,7 +237,7 @@ func TestIntegration_CompleteAuthFlow_WithExtendCache(t *testing.T) {
 	viper.Set("elasticsearch_password", "password")
 	viper.Set("elasticsearch_dry_run", false)
 	viper.Set("extend_cache", true)
-	viper.Set("cache_expire", "2h")
+	viper.Set("cache.expiration", "2h")
 
 	e := echo.New()
 
@@ -431,11 +431,6 @@ func TestIntegration_DecryptionFailure_CorruptedCacheData(t *testing.T) {
 	setupTestCacheForIntegration(t)
 
 	ctx := context.Background()
-	cache.CacheInstance = &cache.GoCache{
-		Cache:  gocache.New(1*time.Hour, 2*time.Hour),
-		TTL:    1 * time.Hour,
-		Tracer: otel.Tracer("test"),
-	}
 
 	cacheKey := "elastauth-corrupteduser"
 	corruptedData := "this-is-not-valid-base64-or-encrypted-data!!!"

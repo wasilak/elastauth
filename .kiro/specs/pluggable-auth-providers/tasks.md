@@ -104,20 +104,20 @@ Transform elastauth from an Authelia-specific authentication proxy into a plugga
   - Test environment variable overrides
   - Verify cachego integration works with all supported providers
 
-- [ ] 3. Phase 3: Generic OAuth2/OIDC Provider Implementation
-- [ ] 3.1 Research OAuth2/OIDC standards and Go libraries
+- [x] 3. Phase 3: Generic OAuth2/OIDC Provider Implementation
+- [x] 3.1 Research OAuth2/OIDC standards and Go libraries
   - Investigate golang.org/x/oauth2 and coreos/go-oidc libraries
   - Design generic OAuth2/OIDC integration approach
   - Plan support for multiple authentication flows and token validation methods
 
-- [ ] 3.2 Implement OAuth2/OIDC provider structure
+- [x] 3.2 Implement OAuth2/OIDC provider structure
   - Create `provider/oidc/` package
   - Implement `OIDCProvider` struct with comprehensive configuration
   - Add support for both OIDC discovery and manual endpoint configuration
   - Implement OAuth2 client setup with PKCE support
   - _Requirements: 3.1, 3.2, 3.5, 3.6, 4.1, 4.2, 4.7_
 
-- [ ] 3.3 Implement token validation and user information extraction
+- [x] 3.3 Implement token validation and user information extraction
   - Implement JWT token verification using JWKS
   - Implement userinfo endpoint validation as alternative
   - Support both Bearer token and cookie-based authentication
@@ -130,7 +130,7 @@ Transform elastauth from an Authelia-specific authentication proxy into a plugga
   - Test configurable claim mappings with various claim structures
   - **Validates: Requirements 3.2, 3.3, 3.4, 3.7, 3.9**
 
-- [ ] 3.5 Implement OAuth2/OIDC configuration validation
+- [x] 3.5 Implement OAuth2/OIDC configuration validation
   - Add comprehensive configuration validation for OAuth2/OIDC settings
   - Support both discovery and manual endpoint configuration
   - Validate client authentication methods and token validation options
@@ -141,13 +141,13 @@ Transform elastauth from an Authelia-specific authentication proxy into a plugga
   - Test configuration validation for various OAuth2/OIDC scenarios
   - **Validates: Requirements 4.1, 4.7**
 
-- [ ] 3.7 Register OAuth2/OIDC provider in factory
+- [x] 3.7 Register OAuth2/OIDC provider in factory
   - Add OIDC provider to provider registration
   - Update configuration validation for OIDC options
   - Test provider selection and instantiation with various configurations
   - _Requirements: 6.1, 6.2, 6.4_
 
-- [ ] 3.8 Phase 3 Checkpoint - OAuth2/OIDC provider works
+- [x] 3.8 Phase 3 Checkpoint - OAuth2/OIDC provider works
   - Ensure all tests pass, ask the user if questions arise
   - Test OAuth2/OIDC provider with test JWT tokens from different issuers
   - Verify integration with existing elastauth flow

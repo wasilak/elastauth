@@ -64,7 +64,8 @@ jobs:
           path: ./docs/dist
 
   deploy:
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    # Deploy on push to main branch OR manual dispatch
+    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'workflow_dispatch'
     needs: build
     runs-on:  ubuntu-latest
     permissions:

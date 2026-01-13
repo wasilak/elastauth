@@ -252,6 +252,88 @@ Transform elastauth from an Authelia-specific authentication proxy into a plugga
   - Verify system works in production-like environment
   - Test horizontal scaling scenarios
 
+- [ ] 6. Phase 6: Documentation Migration to Starlight
+- [ ] 6.1 Research and setup Starlight documentation framework
+  - Research Starlight features and capabilities using Context7 MCP tools
+  - Create new Starlight project structure in docs/ folder using default template
+  - Configure astro.config.mjs with proper site settings, navigation, and rehype-mermaid plugin
+  - Set up package.json with required dependencies (rehype-mermaid, playwright)
+  - Install Playwright browser dependencies for Mermaid rendering
+  - _Requirements: 17.2, 17.6, 17.11_
+
+- [ ] 6.2 Migrate existing documentation content to Starlight
+  - Convert existing Markdown files to Starlight content structure
+  - Migrate docs/concepts.md to getting started section
+  - Migrate provider documentation (authelia.md, oidc.md) to providers section
+  - Migrate cache documentation to cache section
+  - Migrate troubleshooting and upgrading guides
+  - Convert existing Mermaid diagrams to use rehype-mermaid syntax
+  - _Requirements: 17.1, 17.5, 17.11_
+
+- [ ]* 6.3 Write property test for documentation migration completeness
+  - **Property 15: Documentation Migration Completeness**
+  - **Validates: Requirements 17.1, 17.5, 17.13**
+
+- [ ] 6.4 Configure Starlight navigation and features
+  - Set up sidebar navigation with proper categorization
+  - Configure auto-generation for provider and cache sections
+  - Add social links and edit links to GitHub repository
+  - Enable last updated timestamps and SEO optimization (built-in)
+  - Verify light/dark/system theme modes work correctly (built-in)
+  - Test Pagefind search functionality (built-in)
+  - _Requirements: 17.3, 17.4, 17.6, 17.8, 17.10_
+
+- [ ] 6.5 Enhance documentation with Starlight features
+  - Verify full-text search functionality works (built-in Pagefind)
+  - Test light/dark/system theme modes and responsive design (built-in)
+  - Add Mermaid diagrams for architecture and flow documentation
+  - Create cross-references and internal linking between pages
+  - Add YAML configuration examples for different providers and deployments
+  - Remove any code snippets except for YAML configurations
+  - _Requirements: 17.3, 17.4, 17.11, 17.12, 17.13_
+
+- [ ]* 6.6 Write property test for Starlight feature integration
+  - **Property 16: Starlight Feature Integration**
+  - **Validates: Requirements 17.3, 17.4, 17.11**
+
+- [ ] 6.7 Set up GitHub Pages deployment workflow
+  - Create GitHub Actions workflow for documentation deployment
+  - Configure workflow to use Node.js 24 and Task runner
+  - Set up build process with docs:install and docs:build tasks
+  - Configure GitHub Pages deployment with proper permissions
+  - Test deployment workflow with documentation changes
+  - _Requirements: 17.7_
+
+- [ ] 6.8 Create Taskfile configuration for documentation
+  - Add docs:install task for dependency installation
+  - Add docs:dev task for development server
+  - Add docs:build task for production build
+  - Add docs:preview task for build preview
+  - Integrate with existing Taskfile.yml structure
+  - _Requirements: 17.7_
+
+- [ ] 6.9 Migrate OpenAPI specification to Starlight
+  - Convert docs/openapi.yaml to Starlight API documentation
+  - Create dedicated API reference section
+  - Add interactive API documentation if possible
+  - Maintain existing OpenAPI specification functionality
+  - _Requirements: 17.1, 17.5_
+
+- [ ] 6.10 Final documentation testing and validation
+  - Test all internal links and cross-references
+  - Verify search functionality works across all content (Pagefind)
+  - Test mobile responsiveness and theme switching (light/dark/system)
+  - Validate Mermaid diagrams render correctly
+  - Test GitHub Pages deployment and accessibility
+  - Verify no custom CSS is used (default Starlight styling only)
+  - _Requirements: 17.2, 17.3, 17.4, 17.11, 17.13_
+
+- [ ] 6.11 Phase 6 Checkpoint - Documentation migration complete
+  - Ensure all tests pass, ask the user if questions arise
+  - Verify Starlight documentation is fully functional
+  - Test GitHub Pages deployment works correctly
+  - Validate all existing content has been migrated successfully
+
 ## Notes
 
 - Tasks marked with `*` are optional and can be skipped for faster MVP

@@ -87,7 +87,12 @@ func setConfigurationDefaults() {
 	viper.SetDefault("cache.redis_db", 0)
 	viper.SetDefault("cache.path", "/tmp/elastauth-cache")
 
+	// Elasticsearch configuration defaults - support both single and multiple endpoints
 	viper.SetDefault("elasticsearch_dry_run", false)
+	viper.SetDefault("elasticsearch.hosts", []string{})
+	viper.SetDefault("elasticsearch.username", "")
+	viper.SetDefault("elasticsearch.password", "")
+	viper.SetDefault("elasticsearch.dry_run", false)
 
 	// Authelia provider defaults
 	viper.SetDefault("authelia.header_username", "Remote-User")
@@ -129,10 +134,17 @@ func bindProviderEnvironmentVariables() {
 	// Core configuration
 	viper.BindEnv("auth_provider", "ELASTAUTH_AUTH_PROVIDER")
 	viper.BindEnv("secret_key", "ELASTAUTH_SECRET_KEY")
+	
+	// Legacy Elasticsearch configuration (for backward compatibility)
 	viper.BindEnv("elasticsearch_host", "ELASTAUTH_ELASTICSEARCH_HOST")
 	viper.BindEnv("elasticsearch_username", "ELASTAUTH_ELASTICSEARCH_USERNAME")
 	viper.BindEnv("elasticsearch_password", "ELASTAUTH_ELASTICSEARCH_PASSWORD")
 	viper.BindEnv("elasticsearch_dry_run", "ELASTAUTH_ELASTICSEARCH_DRY_RUN")
+	
+	// New Elasticsearch configuration (multi-endpoint support)
+	viper.BindEnv("elasticsearch.username", "ELASTAUTH_ELASTICSEARCH_USERNAME")
+	viper.BindEnv("elasticsearch.password", "ELASTAUTH_ELASTICSEARCH_PASSWORD")
+	viper.BindEnv("elasticsearch.dry_run", "ELASTAUTH_ELASTICSEARCH_DRY_RUN")
 	
 	// Cache configuration
 	viper.BindEnv("cache.type", "ELASTAUTH_CACHE_TYPE")
@@ -395,6 +407,11 @@ func ValidateConfiguration(ctx context.Context) error {
 
 	// Validate cache configuration (both legacy and new cachego format)
 	if err := ValidateCacheConfiguration(ctx); err != nil {
+		return err
+	}
+
+	// Validate Elasticsearch configuration
+	if err := ValidateElasticsearchConfiguration(); err != nil {
 		return err
 	}
 
@@ -793,4 +810,47 @@ func GetEffectiveProviderConfig() map[string]interface{} {
 	default:
 		return make(map[string]interface{})
 	}
+}
+
+// ValidateElasticsearchConfiguration validates Elasticsearch configuration
+func ValidateElasticsearchConfiguration() error {
+	hosts := GetElasticsearchHosts()
+	if len(hosts) == 0 {
+		return fmt.Errorf("no Elasticsearch hosts configured - set elasticsearch.hosts or elasticsearch_host")
+	}
+
+	username := GetElasticsearchUsername()
+	if username == "" {
+		return fmt.Errorf("Elasticsearch username not configured - set elasticsearch.username or elasticsearch_username")
+	}
+
+	password := GetElasticsearchPassword()
+	if password == "" {
+		return fmt.Errorf("Elasticsearch password not configured - set elasticsearch.password or elasticsearch_password")
+	}
+
+	// Validate that all hosts use the same protocol (http or https)
+	var protocol string
+	for i, host := range hosts {
+		if host == "" {
+			return fmt.Errorf("empty Elasticsearch host at index %d", i)
+		}
+
+		if i == 0 {
+			if len(host) > 8 && host[:8] == "https://" {
+				protocol = "https"
+			} else if len(host) > 7 && host[:7] == "http://" {
+				protocol = "http"
+			} else {
+				return fmt.Errorf("Elasticsearch host %s must start with http:// or https://", host)
+			}
+		} else {
+			expectedPrefix := protocol + "://"
+			if len(host) < len(expectedPrefix) || host[:len(expectedPrefix)] != expectedPrefix {
+				return fmt.Errorf("all Elasticsearch hosts must use the same protocol (%s), but host %s uses different protocol", protocol, host)
+			}
+		}
+	}
+
+	return nil
 }

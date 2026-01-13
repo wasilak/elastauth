@@ -445,7 +445,7 @@ func TestValidateRequiredConfig_MultipleFieldsMissing(t *testing.T) {
 func TestValidateConfiguration_AllValid(t *testing.T) {
 	ctx := context.Background()
 
-	viper.Set("elasticsearch_host", "localhost:9200")
+	viper.Set("elasticsearch_host", "http://localhost:9200")
 	viper.Set("elasticsearch_username", "user")
 	viper.Set("elasticsearch_password", "pass")
 	viper.Set("secret_key", generateValidSecretKey())
@@ -496,7 +496,7 @@ func TestValidateConfiguration_RedisCacheWithoutRedisHost(t *testing.T) {
 func TestValidateConfiguration_RedisCacheWithRedisHost(t *testing.T) {
 	ctx := context.Background()
 
-	viper.Set("elasticsearch_host", "localhost:9200")
+	viper.Set("elasticsearch_host", "http://localhost:9200")
 	viper.Set("elasticsearch_username", "user")
 	viper.Set("elasticsearch_password", "pass")
 	viper.Set("secret_key", generateValidSecretKey())
@@ -552,7 +552,7 @@ func TestValidateConfiguration_AllValidLogLevels(t *testing.T) {
 
 	for _, level := range logLevels {
 		t.Run("log_level_"+level, func(t *testing.T) {
-			viper.Set("elasticsearch_host", "localhost:9200")
+			viper.Set("elasticsearch_host", "http://localhost:9200")
 			viper.Set("elasticsearch_username", "user")
 			viper.Set("elasticsearch_password", "pass")
 			viper.Set("secret_key", generateValidSecretKey())
@@ -578,7 +578,7 @@ func TestValidateConfiguration_AllValidLogLevels(t *testing.T) {
 func TestValidateConfiguration_InvalidLogLevel(t *testing.T) {
 	ctx := context.Background()
 
-	viper.Set("elasticsearch_host", "localhost:9200")
+	viper.Set("elasticsearch_host", "http://localhost:9200")
 	viper.Set("elasticsearch_username", "user")
 	viper.Set("elasticsearch_password", "pass")
 	viper.Set("secret_key", generateValidSecretKey())
@@ -867,5 +867,106 @@ func TestProviderRegistration_AllExpectedProvidersAvailable(t *testing.T) {
 	
 	if len(available) < 2 {
 		t.Errorf("Expected at least 2 providers to be registered, got %d: %v", len(available), available)
+	}
+}
+
+func TestIntegration_OIDCProviderWithExampleConfigurations(t *testing.T) {
+	// Test OIDC provider with Keycloak-style configuration
+	viper.Reset()
+	viper.Set("auth_provider", "oidc")
+	viper.Set("oidc.issuer", "https://keycloak.example.com/realms/myrealm")
+	viper.Set("oidc.client_id", "elastauth")
+	viper.Set("oidc.client_secret", "test-secret")
+	viper.Set("oidc.scopes", []string{"openid", "profile", "email", "roles"})
+	viper.Set("oidc.claim_mappings.username", "preferred_username")
+	viper.Set("oidc.claim_mappings.email", "email")
+	viper.Set("oidc.claim_mappings.groups", "realm_access.roles")
+	viper.Set("oidc.claim_mappings.full_name", "name")
+	
+	// Test that OIDC provider can be created (will fail due to network, but validates config)
+	_, err := provider.DefaultFactory.Create("oidc", nil)
+	if err == nil {
+		t.Error("Expected OIDC provider creation to fail without real issuer, but it succeeded")
+	}
+	
+	// The error should be about network/discovery, not configuration
+	if strings.Contains(err.Error(), "client_id is required") {
+		t.Errorf("Configuration should be valid, but got validation error: %v", err)
+	}
+	
+	// Test with Casdoor-style configuration
+	viper.Reset()
+	viper.Set("auth_provider", "oidc")
+	viper.Set("oidc.issuer", "https://casdoor.example.com")
+	viper.Set("oidc.client_id", "elastauth-app")
+	viper.Set("oidc.client_secret", "casdoor-secret")
+	viper.Set("oidc.scopes", []string{"openid", "profile", "email"})
+	viper.Set("oidc.claim_mappings.username", "name")
+	viper.Set("oidc.claim_mappings.email", "email")
+	viper.Set("oidc.claim_mappings.groups", "roles")
+	viper.Set("oidc.claim_mappings.full_name", "displayName")
+	
+	_, err = provider.DefaultFactory.Create("oidc", nil)
+	if err == nil {
+		t.Error("Expected OIDC provider creation to fail without real issuer, but it succeeded")
+	}
+	
+	// The error should be about network/discovery, not configuration
+	if strings.Contains(err.Error(), "client_id is required") {
+		t.Errorf("Configuration should be valid, but got validation error: %v", err)
+	}
+	
+	// Test with Authentik-style configuration
+	viper.Reset()
+	viper.Set("auth_provider", "oidc")
+	viper.Set("oidc.issuer", "https://authentik.example.com/application/o/elastauth/")
+	viper.Set("oidc.client_id", "elastauth")
+	viper.Set("oidc.client_secret", "authentik-secret")
+	viper.Set("oidc.scopes", []string{"openid", "profile", "email", "groups"})
+	viper.Set("oidc.claim_mappings.username", "preferred_username")
+	viper.Set("oidc.claim_mappings.email", "email")
+	viper.Set("oidc.claim_mappings.groups", "groups")
+	viper.Set("oidc.claim_mappings.full_name", "name")
+	
+	_, err = provider.DefaultFactory.Create("oidc", nil)
+	if err == nil {
+		t.Error("Expected OIDC provider creation to fail without real issuer, but it succeeded")
+	}
+	
+	// The error should be about network/discovery, not configuration
+	if strings.Contains(err.Error(), "client_id is required") {
+		t.Errorf("Configuration should be valid, but got validation error: %v", err)
+	}
+}
+
+func TestIntegration_OIDCProviderManualEndpoints(t *testing.T) {
+	// Test OIDC provider with manual endpoint configuration (no discovery)
+	viper.Reset()
+	viper.Set("auth_provider", "oidc")
+	viper.Set("oidc.client_id", "test-client")
+	viper.Set("oidc.client_secret", "test-secret")
+	viper.Set("oidc.authorization_endpoint", "https://auth.example.com/auth")
+	viper.Set("oidc.token_endpoint", "https://auth.example.com/token")
+	viper.Set("oidc.userinfo_endpoint", "https://auth.example.com/userinfo")
+	viper.Set("oidc.token_validation", "userinfo")
+	viper.Set("oidc.scopes", []string{"openid", "profile", "email"})
+	viper.Set("oidc.claim_mappings.username", "sub")
+	viper.Set("oidc.claim_mappings.email", "email")
+	viper.Set("oidc.claim_mappings.groups", "groups")
+	viper.Set("oidc.claim_mappings.full_name", "name")
+	
+	// Test that OIDC provider can be created with manual endpoints
+	authProvider, err := provider.DefaultFactory.Create("oidc", nil)
+	if err != nil {
+		t.Fatalf("Failed to create OIDC provider with manual endpoints: %v", err)
+	}
+	
+	if authProvider.Type() != "oidc" {
+		t.Errorf("Expected provider type 'oidc', got '%s'", authProvider.Type())
+	}
+	
+	// Test validation
+	if err := authProvider.Validate(); err != nil {
+		t.Errorf("OIDC provider validation failed: %v", err)
 	}
 }

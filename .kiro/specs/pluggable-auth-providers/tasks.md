@@ -153,20 +153,20 @@ Transform elastauth from an Authelia-specific authentication proxy into a plugga
   - Verify integration with existing elastauth flow
   - Test with example configurations for Casdoor, Keycloak, and Authentik
 
-- [ ] 4. Phase 4: Enhanced API and Documentation
-- [ ] 4.1 Implement Swagger/OpenAPI specification
+- [-] 4. Phase 4: Enhanced API and Documentation
+- [x] 4.1 Implement Swagger/OpenAPI specification
   - Add OpenAPI specification for all API endpoints
   - Include request and response schemas
   - Add example requests and responses for success and error cases
   - _Requirements: 12.1, 12.6, 12.7_
 
-- [ ] 4.2 Serve interactive API documentation
+- [x] 4.2 Serve interactive API documentation
   - Add endpoint to serve Swagger UI
   - Ensure API documentation is accessible and interactive
   - Validate API requests against OpenAPI schema where possible
   - _Requirements: 12.2, 12.8_
 
-- [ ] 4.3 Enhance API response consistency
+- [x] 4.3 Enhance API response consistency
   - Ensure all endpoints return JSON responses (never just status codes)
   - Implement consistent error response structure
   - Follow RESTful conventions and proper HTTP status codes
@@ -176,26 +176,26 @@ Transform elastauth from an Authelia-specific authentication proxy into a plugga
   - **Property 11: JSON Response Consistency**
   - **Validates: Requirements 12.4, 12.5**
 
-- [ ] 4.5 Create comprehensive documentation structure
+- [x] 4.5 Create comprehensive documentation structure
   - Create `docs/` folder with structured documentation
   - Write concepts overview and architecture documentation
   - Create OAuth2/OIDC provider documentation with examples for popular providers
   - Add configuration examples and troubleshooting guides
   - _Requirements: 15.1, 15.3, 15.6, 15.9, 15.10_
 
-- [ ] 4.6 Update main README with documentation links
+- [x] 4.6 Update main README with documentation links
   - Simplify README to link to specific documentation topics
   - Add cross-links between documentation files
   - Include horizontal scaling guide
   - _Requirements: 15.2, 15.5, 15.8_
 
-- [ ] 4.7 Phase 4 Checkpoint - API and documentation complete
+- [x] 4.7 Phase 4 Checkpoint - API and documentation complete
   - Ensure all tests pass, ask the user if questions arise
   - Verify Swagger UI works and shows all endpoints
   - Review documentation completeness
 
-- [ ] 5. Phase 5: Multi-Elasticsearch and Production Readiness
-- [ ] 5.1 Implement multi-endpoint Elasticsearch support
+- [-] 5. Phase 5: Multi-Elasticsearch and Production Readiness
+- [-] 5.1 Implement multi-endpoint Elasticsearch support
   - Enhance `libs/elastic.go` to support multiple endpoints
   - Implement failover logic for Elasticsearch connectivity
   - Add endpoint validation and logging

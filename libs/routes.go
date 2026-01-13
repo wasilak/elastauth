@@ -115,6 +115,7 @@ func extendCachedItemTTL(ctx context.Context, cacheKey string, item interface{})
 type configResponse struct {
 	AuthProvider    string                 `json:"auth_provider"`
 	Cache           map[string]interface{} `json:"cache"`
+	Elasticsearch   map[string]interface{} `json:"elasticsearch"`
 	DefaultRoles    []string               `json:"default_roles"`
 	GroupMappings   map[string][]string    `json:"group_mappings"`
 	ProviderConfig  map[string]interface{} `json:"provider_config"`
@@ -270,12 +271,18 @@ func MainRoute(c echo.Context) error {
 			Metadata: elasticsearchUserMetadata,
 		}
 
-		if !viper.GetBool("elasticsearch_dry_run") {
+		if !GetElasticsearchDryRun() {
+			hosts := GetElasticsearchHosts()
+			if len(hosts) == 0 {
+				slog.ErrorContext(ctx, "No Elasticsearch hosts configured")
+				return c.JSON(http.StatusInternalServerError, NewErrorResponse("Internal server error", http.StatusInternalServerError))
+			}
+
 			err := initElasticClient(
 				ctx,
-				viper.GetString("elasticsearch_host"),
-				viper.GetString("elasticsearch_username"),
-				viper.GetString("elasticsearch_password"),
+				hosts,
+				GetElasticsearchUsername(),
+				GetElasticsearchPassword(),
 			)
 			if err != nil {
 				slog.ErrorContext(ctx, "Failed to initialize Elasticsearch client", slog.Any("error", SanitizeForLogging(err)))
@@ -371,6 +378,14 @@ func ConfigRoute(c echo.Context) error {
 		}
 	}
 
+	// Get Elasticsearch configuration with masked credentials
+	elasticsearchConfig := map[string]interface{}{
+		"hosts":    GetElasticsearchHosts(),
+		"username": GetElasticsearchUsername(),
+		"password": "***", // Always mask password
+		"dry_run":  GetElasticsearchDryRun(),
+	}
+
 	// Get provider-specific configuration
 	var providerConfig map[string]interface{}
 	switch authProvider {
@@ -396,6 +411,7 @@ func ConfigRoute(c echo.Context) error {
 	response := configResponse{
 		AuthProvider:   authProvider,
 		Cache:          maskedCacheConfig,
+		Elasticsearch:  elasticsearchConfig,
 		DefaultRoles:   viper.GetStringSlice("default_roles"),
 		GroupMappings:  viper.GetStringMapStringSlice("group_mappings"),
 		ProviderConfig: providerConfig,

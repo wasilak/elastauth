@@ -5,8 +5,8 @@ import mermaid from 'astro-mermaid';
 
 // https://astro.build/config
 export default defineConfig({
-	site: 'https://wasilak.github.io',
-	base: '/elastauth',
+	site: process.env.ASTRO_SITE || 'https://wasilak.github.io',
+	base: process.env.ASTRO_BASE || '/elastauth',
 	integrations: [
 		mermaid({
 			theme: 'default',

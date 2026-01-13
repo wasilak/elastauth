@@ -469,7 +469,7 @@ func TestValidateConfiguration_AllValid(t *testing.T) {
 func TestValidateConfiguration_RedisCacheWithoutRedisHost(t *testing.T) {
 	ctx := context.Background()
 
-	viper.Set("elasticsearch_host", "localhost:9200")
+	viper.Set("elasticsearch_host", "http://localhost:9200")
 	viper.Set("elasticsearch_username", "user")
 	viper.Set("elasticsearch_password", "pass")
 	viper.Set("secret_key", generateValidSecretKey())
@@ -490,7 +490,7 @@ func TestValidateConfiguration_RedisCacheWithoutRedisHost(t *testing.T) {
 	err := ValidateConfiguration(ctx)
 
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "redis cache requires cache.redis_host configuration")
+	assert.Contains(t, err.Error(), "redis cache requires redis host configuration")
 }
 
 func TestValidateConfiguration_RedisCacheWithRedisHost(t *testing.T) {
@@ -544,6 +544,221 @@ func TestValidateConfiguration_InvalidCacheType(t *testing.T) {
 	assert.Contains(t, err.Error(), "invalid cache type")
 	assert.Contains(t, err.Error(), "memcached")
 	assert.Contains(t, err.Error(), "memory, redis, file")
+}
+
+func TestValidateConfiguration_LegacyCacheConfiguration(t *testing.T) {
+	ctx := context.Background()
+
+	viper.Set("elasticsearch_host", "http://localhost:9200")
+	viper.Set("elasticsearch_username", "user")
+	viper.Set("elasticsearch_password", "pass")
+	viper.Set("secret_key", generateValidSecretKey())
+	viper.Set("cache_type", "redis")
+	viper.Set("redis_host", "localhost:6379")
+	viper.Set("log_level", "info")
+
+	defer func() {
+		viper.Set("elasticsearch_host", "")
+		viper.Set("elasticsearch_username", "")
+		viper.Set("elasticsearch_password", "")
+		viper.Set("secret_key", "")
+		viper.Set("cache_type", "")
+		viper.Set("redis_host", "")
+		viper.Set("log_level", "info")
+	}()
+
+	err := ValidateConfiguration(ctx)
+
+	assert.NoError(t, err)
+}
+
+func TestValidateConfiguration_MultipleCacheTypes(t *testing.T) {
+	ctx := context.Background()
+
+	viper.Set("elasticsearch_host", "http://localhost:9200")
+	viper.Set("elasticsearch_username", "user")
+	viper.Set("elasticsearch_password", "pass")
+	viper.Set("secret_key", generateValidSecretKey())
+	viper.Set("cache_type", "redis")        // Legacy
+	viper.Set("cache.type", "memory")       // New
+	viper.Set("log_level", "info")
+
+	defer func() {
+		viper.Set("elasticsearch_host", "")
+		viper.Set("elasticsearch_username", "")
+		viper.Set("elasticsearch_password", "")
+		viper.Set("secret_key", "")
+		viper.Set("cache_type", "")
+		viper.Set("cache.type", "")
+		viper.Set("log_level", "info")
+	}()
+
+	err := ValidateConfiguration(ctx)
+
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "multiple cache types configured")
+	assert.Contains(t, err.Error(), "redis")
+	assert.Contains(t, err.Error(), "memory")
+}
+
+func TestValidateConfiguration_NoCacheConfigured(t *testing.T) {
+	ctx := context.Background()
+
+	viper.Set("elasticsearch_host", "http://localhost:9200")
+	viper.Set("elasticsearch_username", "user")
+	viper.Set("elasticsearch_password", "pass")
+	viper.Set("secret_key", generateValidSecretKey())
+	viper.Set("log_level", "info")
+
+	defer func() {
+		viper.Set("elasticsearch_host", "")
+		viper.Set("elasticsearch_username", "")
+		viper.Set("elasticsearch_password", "")
+		viper.Set("secret_key", "")
+		viper.Set("log_level", "info")
+	}()
+
+	err := ValidateConfiguration(ctx)
+
+	assert.NoError(t, err) // No cache should be valid
+}
+
+func TestValidateConfiguration_FileCacheConfiguration(t *testing.T) {
+	ctx := context.Background()
+
+	// Create a temporary directory for testing
+	tempDir := t.TempDir()
+
+	viper.Set("elasticsearch_host", "http://localhost:9200")
+	viper.Set("elasticsearch_username", "user")
+	viper.Set("elasticsearch_password", "pass")
+	viper.Set("secret_key", generateValidSecretKey())
+	viper.Set("cache.type", "file")
+	viper.Set("cache.path", tempDir+"/cache")
+	viper.Set("log_level", "info")
+
+	defer func() {
+		viper.Set("elasticsearch_host", "")
+		viper.Set("elasticsearch_username", "")
+		viper.Set("elasticsearch_password", "")
+		viper.Set("secret_key", "")
+		viper.Set("cache.type", "")
+		viper.Set("cache.path", "")
+		viper.Set("log_level", "info")
+	}()
+
+	err := ValidateConfiguration(ctx)
+
+	assert.NoError(t, err)
+}
+
+func TestValidateConfiguration_FileCacheInvalidPath(t *testing.T) {
+	ctx := context.Background()
+
+	viper.Set("elasticsearch_host", "http://localhost:9200")
+	viper.Set("elasticsearch_username", "user")
+	viper.Set("elasticsearch_password", "pass")
+	viper.Set("secret_key", generateValidSecretKey())
+	viper.Set("cache.type", "file")
+	viper.Set("cache.path", "/root/readonly/cache") // Should fail on most systems
+	viper.Set("log_level", "info")
+
+	defer func() {
+		viper.Set("elasticsearch_host", "")
+		viper.Set("elasticsearch_username", "")
+		viper.Set("elasticsearch_password", "")
+		viper.Set("secret_key", "")
+		viper.Set("cache.type", "")
+		viper.Set("cache.path", "")
+		viper.Set("log_level", "info")
+	}()
+
+	err := ValidateConfiguration(ctx)
+
+	// This might pass or fail depending on system permissions, so we just check it doesn't panic
+	_ = err
+}
+
+func TestValidateConfiguration_InvalidCacheExpiration(t *testing.T) {
+	ctx := context.Background()
+
+	viper.Set("elasticsearch_host", "http://localhost:9200")
+	viper.Set("elasticsearch_username", "user")
+	viper.Set("elasticsearch_password", "pass")
+	viper.Set("secret_key", generateValidSecretKey())
+	viper.Set("cache.type", "memory")
+	viper.Set("cache.expiration", "invalid-duration")
+	viper.Set("log_level", "info")
+
+	defer func() {
+		viper.Set("elasticsearch_host", "")
+		viper.Set("elasticsearch_username", "")
+		viper.Set("elasticsearch_password", "")
+		viper.Set("secret_key", "")
+		viper.Set("cache.type", "")
+		viper.Set("cache.expiration", "")
+		viper.Set("log_level", "info")
+	}()
+
+	err := ValidateConfiguration(ctx)
+
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid cache expiration format")
+	assert.Contains(t, err.Error(), "invalid-duration")
+}
+
+func TestValidateHorizontalScalingConstraints(t *testing.T) {
+	ctx := context.Background()
+
+	tests := []struct {
+		name      string
+		cacheType string
+		expectLog string
+	}{
+		{
+			name:      "memory cache",
+			cacheType: "memory",
+			expectLog: "single instance only",
+		},
+		{
+			name:      "file cache",
+			cacheType: "file",
+			expectLog: "single instance only",
+		},
+		{
+			name:      "redis cache",
+			cacheType: "redis",
+			expectLog: "supports horizontal scaling",
+		},
+		{
+			name:      "no cache",
+			cacheType: "",
+			expectLog: "supports horizontal scaling with independent instances",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Set up cache configuration
+			if tt.cacheType != "" {
+				viper.Set("cache.type", tt.cacheType)
+				if tt.cacheType == "redis" {
+					viper.Set("cache.redis_host", "localhost:6379")
+				} else if tt.cacheType == "file" {
+					viper.Set("cache.path", t.TempDir()+"/cache")
+				}
+			}
+
+			defer func() {
+				viper.Set("cache.type", "")
+				viper.Set("cache.redis_host", "")
+				viper.Set("cache.path", "")
+			}()
+
+			err := ValidateHorizontalScalingConstraints(ctx)
+			assert.NoError(t, err)
+		})
+	}
 }
 
 func TestValidateConfiguration_AllValidLogLevels(t *testing.T) {

@@ -7,7 +7,9 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 	"strings"
+	"time"
 
 	"log/slog"
 
@@ -629,42 +631,75 @@ func ValidateOIDCConfiguration(ctx context.Context) error {
 // ValidateCacheConfiguration validates cache configuration for both legacy and cachego formats.
 // It ensures exactly zero or one cache type is configured.
 func ValidateCacheConfiguration(ctx context.Context) error {
-	// Check for legacy configuration and reject it
+	// Check for both legacy and new configuration
 	legacyCacheType := viper.GetString("cache_type")
-	legacyRedisHost := viper.GetString("redis_host")
-	legacyCacheExpire := viper.GetString("cache_expire")
-	legacyRedisDB := viper.GetInt("redis_db")
+	newCacheType := viper.GetString("cache.type")
 	
-	if legacyCacheType != "" || legacyRedisHost != "" || legacyCacheExpire != "" || legacyRedisDB != 0 {
-		return fmt.Errorf("legacy cache configuration detected. Please migrate to new format:\n" +
-			"  Old: cache_type, redis_host, cache_expire, redis_db\n" +
-			"  New: cache.type, cache.redis_host, cache.expiration, cache.redis_db\n" +
-			"See documentation for migration guide")
+	// Count configured cache types
+	configuredCacheTypes := 0
+	var activeCacheType string
+	
+	// Check legacy configuration
+	if legacyCacheType != "" {
+		configuredCacheTypes++
+		activeCacheType = legacyCacheType
 	}
 	
-	// Only validate new cachego configuration
-	cacheType := viper.GetString("cache.type")
+	// Check new configuration
+	if newCacheType != "" {
+		configuredCacheTypes++
+		activeCacheType = newCacheType
+	}
 	
-	// Validate cache type if specified
-	if cacheType != "" {
-		validCacheTypes := []string{"memory", "redis", "file"}
-		validCacheType := false
-		for _, validType := range validCacheTypes {
-			if cacheType == validType {
-				validCacheType = true
-				break
-			}
+	// Validate exactly zero or one cache type is configured
+	if configuredCacheTypes > 1 {
+		return fmt.Errorf("multiple cache types configured: found both legacy (%s) and new (%s) cache configuration. Please use only one format", legacyCacheType, newCacheType)
+	}
+	
+	// If no cache is configured, that's valid (cache-disabled scenario)
+	if configuredCacheTypes == 0 {
+		slog.DebugContext(ctx, "No cache configured - running in cache-disabled mode")
+		return nil
+	}
+	
+	// Validate the active cache type
+	validCacheTypes := []string{"memory", "redis", "file"}
+	validCacheType := false
+	for _, validType := range validCacheTypes {
+		if activeCacheType == validType {
+			validCacheType = true
+			break
 		}
-		if !validCacheType {
-			return fmt.Errorf("invalid cache type: %s (must be one of: memory, redis, file, or empty for no caching)", cacheType)
-		}
-		
-		// Validate cache-specific configuration
-		switch cacheType {
-		case "redis":
-			return ValidateRedisCacheConfiguration(ctx)
-		case "file":
-			return ValidateFileCacheConfiguration(ctx)
+	}
+	if !validCacheType {
+		return fmt.Errorf("invalid cache type: %s (must be one of: memory, redis, file, or empty for no caching)", activeCacheType)
+	}
+	
+	// Validate cache-specific configuration based on active type
+	switch activeCacheType {
+	case "redis":
+		return ValidateRedisCacheConfiguration(ctx)
+	case "file":
+		return ValidateFileCacheConfiguration(ctx)
+	case "memory":
+		// Memory cache doesn't need additional validation
+		return ValidateMemoryCacheConfiguration(ctx)
+	}
+	
+	return nil
+}
+
+// ValidateMemoryCacheConfiguration validates memory cache configuration
+func ValidateMemoryCacheConfiguration(ctx context.Context) error {
+	// Memory cache has horizontal scaling constraints
+	slog.WarnContext(ctx, "Memory cache is configured - this limits deployment to single instance only for consistency")
+	
+	// Check if expiration is set (optional for memory cache)
+	expiration := viper.GetString("cache.expiration")
+	if expiration != "" {
+		// Validate expiration format
+		if _, err := time.ParseDuration(expiration); err != nil {
+			return fmt.Errorf("invalid cache expiration format: %s (must be a valid duration like '1h', '30m', '300s')", expiration)
 		}
 	}
 	
@@ -673,11 +708,42 @@ func ValidateCacheConfiguration(ctx context.Context) error {
 
 // ValidateRedisCacheConfiguration validates Redis cache configuration.
 func ValidateRedisCacheConfiguration(ctx context.Context) error {
-	// Only check new configuration format
-	redisHost := viper.GetString("cache.redis_host")
-	if redisHost == "" {
-		return fmt.Errorf("redis cache requires cache.redis_host configuration")
+	// Support both legacy and new configuration formats
+	var redisHost string
+	var redisDB int
+	var expiration string
+	
+	// Check new format first
+	newRedisHost := viper.GetString("cache.redis_host")
+	if newRedisHost != "" {
+		redisHost = newRedisHost
+		redisDB = viper.GetInt("cache.redis_db")
+		expiration = viper.GetString("cache.expiration")
+	} else {
+		// Fall back to legacy format
+		redisHost = viper.GetString("redis_host")
+		redisDB = viper.GetInt("redis_db")
+		expiration = viper.GetString("cache_expire")
 	}
+	
+	if redisHost == "" {
+		return fmt.Errorf("redis cache requires redis host configuration (cache.redis_host or redis_host)")
+	}
+	
+	// Validate Redis DB number
+	if redisDB < 0 || redisDB > 15 {
+		return fmt.Errorf("invalid redis database number: %d (must be between 0 and 15)", redisDB)
+	}
+	
+	// Validate expiration format if set
+	if expiration != "" {
+		if _, err := time.ParseDuration(expiration); err != nil {
+			return fmt.Errorf("invalid cache expiration format: %s (must be a valid duration like '1h', '30m', '300s')", expiration)
+		}
+	}
+	
+	// Redis cache supports horizontal scaling
+	slog.InfoContext(ctx, "Redis cache configured - supports horizontal scaling with shared Redis instance")
 	
 	return nil
 }
@@ -689,6 +755,30 @@ func ValidateFileCacheConfiguration(ctx context.Context) error {
 		return fmt.Errorf("file cache requires path configuration (set cache.path)")
 	}
 	
+	// Validate that the cache directory is writable
+	dir := filepath.Dir(cachePath)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return fmt.Errorf("cannot create cache directory %s: %w", dir, err)
+	}
+	
+	// Test write permissions
+	testFile := filepath.Join(dir, ".elastauth-cache-test")
+	if err := os.WriteFile(testFile, []byte("test"), 0644); err != nil {
+		return fmt.Errorf("cache directory %s is not writable: %w", dir, err)
+	}
+	os.Remove(testFile) // Clean up test file
+	
+	// Validate expiration format if set
+	expiration := viper.GetString("cache.expiration")
+	if expiration != "" {
+		if _, err := time.ParseDuration(expiration); err != nil {
+			return fmt.Errorf("invalid cache expiration format: %s (must be a valid duration like '1h', '30m', '300s')", expiration)
+		}
+	}
+	
+	// File cache has horizontal scaling constraints
+	slog.WarnContext(ctx, "File cache configured - this limits deployment to single instance only for consistency")
+	
 	return nil
 }
 
@@ -696,14 +786,56 @@ func ValidateFileCacheConfiguration(ctx context.Context) error {
 func GetEffectiveCacheConfig() map[string]interface{} {
 	config := make(map[string]interface{})
 	
-	// Only use new cachego configuration format
-	config["type"] = viper.GetString("cache.type")
-	config["expiration"] = viper.GetString("cache.expiration")
-	config["redis_host"] = viper.GetString("cache.redis_host")
-	config["redis_db"] = viper.GetInt("cache.redis_db")
-	config["path"] = viper.GetString("cache.path")
+	// Determine which configuration format is being used
+	legacyCacheType := viper.GetString("cache_type")
+	newCacheType := viper.GetString("cache.type")
+	
+	if legacyCacheType != "" {
+		// Use legacy configuration format
+		config["type"] = legacyCacheType
+		config["expiration"] = viper.GetString("cache_expire")
+		config["redis_host"] = viper.GetString("redis_host")
+		config["redis_db"] = viper.GetInt("redis_db")
+		config["format"] = "legacy"
+	} else if newCacheType != "" {
+		// Use new cachego configuration format
+		config["type"] = newCacheType
+		config["expiration"] = viper.GetString("cache.expiration")
+		config["redis_host"] = viper.GetString("cache.redis_host")
+		config["redis_db"] = viper.GetInt("cache.redis_db")
+		config["path"] = viper.GetString("cache.path")
+		config["format"] = "new"
+	} else {
+		// No cache configured
+		config["type"] = "disabled"
+		config["format"] = "none"
+	}
 	
 	return config
+}
+
+// ValidateHorizontalScalingConstraints validates cache configuration for horizontal scaling
+func ValidateHorizontalScalingConstraints(ctx context.Context) error {
+	cacheConfig := GetEffectiveCacheConfig()
+	cacheType := cacheConfig["type"].(string)
+	
+	switch cacheType {
+	case "memory", "file":
+		slog.WarnContext(ctx, "Cache type limits horizontal scaling", 
+			slog.String("cache_type", cacheType),
+			slog.String("constraint", "single instance only"))
+		return nil
+	case "redis":
+		slog.InfoContext(ctx, "Cache type supports horizontal scaling", 
+			slog.String("cache_type", cacheType),
+			slog.String("requirement", "shared Redis instance across all instances"))
+		return nil
+	case "disabled":
+		slog.InfoContext(ctx, "No cache configured - supports horizontal scaling with independent instances")
+		return nil
+	default:
+		return fmt.Errorf("unknown cache type for horizontal scaling validation: %s", cacheType)
+	}
 }
 
 // GetEffectiveAutheliaConfig returns the effective Authelia configuration, handling both legacy and new formats.

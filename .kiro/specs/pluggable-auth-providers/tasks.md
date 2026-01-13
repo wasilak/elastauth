@@ -195,7 +195,7 @@ Transform elastauth from an Authelia-specific authentication proxy into a plugga
   - Review documentation completeness
 
 - [-] 5. Phase 5: Multi-Elasticsearch and Production Readiness
-- [-] 5.1 Implement multi-endpoint Elasticsearch support
+- [x] 5.1 Implement multi-endpoint Elasticsearch support
   - Enhance `libs/elastic.go` to support multiple endpoints
   - Implement failover logic for Elasticsearch connectivity
   - Add endpoint validation and logging
@@ -205,7 +205,7 @@ Transform elastauth from an Authelia-specific authentication proxy into a plugga
   - **Property 10: Elasticsearch Failover**
   - **Validates: Requirements 10.3, 10.7**
 
-- [ ] 5.3 Enhance cachego configuration validation and multi-provider support
+- [-] 5.3 Enhance cachego configuration validation and multi-provider support
   - Implement validation for exactly zero or one cache type
   - Add cache configuration compatibility checks with cachego
   - Support cache-disabled scenarios

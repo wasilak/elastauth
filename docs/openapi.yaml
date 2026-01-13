@@ -1,0 +1,401 @@
+openapi: 3.0.3
+info:
+  title: elastauth API
+  description: |
+    elastauth is a stateless authentication proxy that bridges authentication providers 
+    with Elasticsearch and Kibana. It supports pluggable authentication providers including 
+    Authelia (header-based) and OAuth2/OIDC providers.
+    
+    ## Authentication Flow
+    
+    1. Client sends request with authentication information (headers, tokens, etc.)
+    2. elastauth extracts user information using the configured provider
+    3. elastauth generates/retrieves temporary Elasticsearch credentials
+    4. elastauth returns Authorization header for Elasticsearch/Kibana access
+    
+    ## Supported Providers
+    
+    - **Authelia**: Header-based authentication (Remote-User, Remote-Groups, etc.)
+    - **OAuth2/OIDC**: Generic OAuth2/OIDC provider supporting JWT tokens
+      - Casdoor, Keycloak, Authentik, Auth0, Azure AD, Pocket-ID, Ory Hydra
+  version: 2.0.0
+  contact:
+    name: elastauth
+    url: https://github.com/wasilak/elastauth
+  license:
+    name: MIT
+    url: https://github.com/wasilak/elastauth/blob/main/LICENSE
+
+servers:
+  - url: http://localhost:5000
+    description: Development server
+  - url: https://auth.example.com
+    description: Production server
+
+paths:
+  /:
+    get:
+      summary: Main authentication endpoint
+      description: |
+        Primary endpoint that processes authentication requests and returns 
+        Elasticsearch authorization credentials. The authentication method depends 
+        on the configured provider (headers for Authelia, JWT tokens for OIDC).
+      operationId: authenticate
+      security:
+        - AutheliaHeaders: []
+        - BearerAuth: []
+        - CookieAuth: []
+      responses:
+        '200':
+          description: Authentication successful
+          headers:
+            Authorization:
+              description: Basic authentication header for Elasticsearch/Kibana
+              schema:
+                type: string
+                example: "Basic dXNlcm5hbWU6cGFzc3dvcmQ="
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthSuccess'
+              examples:
+                success:
+                  summary: Successful authentication
+                  value:
+                    status: "OK"
+                    user: "john.doe"
+        '400':
+          description: Bad request - Invalid authentication data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                invalid_username:
+                  summary: Invalid username format
+                  value:
+                    message: "Invalid username format"
+                    code: 400
+                    timestamp: "2024-01-15T10:30:00Z"
+                missing_headers:
+                  summary: Missing required headers (Authelia)
+                  value:
+                    message: "Remote-User header not found"
+                    code: 400
+                    timestamp: "2024-01-15T10:30:01Z"
+                invalid_token:
+                  summary: Invalid JWT token (OIDC)
+                  value:
+                    message: "Token validation failed: invalid signature"
+                    code: 400
+                    timestamp: "2024-01-15T10:30:02Z"
+        '401':
+          description: Unauthorized - Authentication failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                auth_failed:
+                  summary: Authentication failed
+                  value:
+                    message: "Authentication failed"
+                    code: 401
+                    timestamp: "2024-01-15T10:30:03Z"
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                server_error:
+                  summary: Internal server error
+                  value:
+                    message: "Internal server error"
+                    code: 500
+                    timestamp: "2024-01-15T10:30:04Z"
+
+  /health:
+    get:
+      summary: Health check endpoint
+      description: Returns the health status of the elastauth service
+      operationId: healthCheck
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+              examples:
+                healthy:
+                  summary: Service is healthy
+                  value:
+                    status: "OK"
+
+  /config:
+    get:
+      summary: Configuration information endpoint
+      description: |
+        Returns current configuration information including active authentication 
+        provider, cache settings, and role mappings. Sensitive values are masked.
+      operationId: getConfig
+      responses:
+        '200':
+          description: Configuration information
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConfigResponse'
+              examples:
+                authelia_config:
+                  summary: Authelia provider configuration
+                  value:
+                    auth_provider: "authelia"
+                    cache:
+                      type: "redis"
+                      expiration: "1h"
+                      redis_host: "localhost:6379"
+                      redis_db: 0
+                    default_roles:
+                      - "kibana_user"
+                    group_mappings:
+                      admin:
+                        - "kibana_admin"
+                      developers:
+                        - "kibana_user"
+                        - "dev_role"
+                    provider_config:
+                      header_username: "Remote-User"
+                      header_groups: "Remote-Groups"
+                      header_email: "Remote-Email"
+                      header_name: "Remote-Name"
+                oidc_config:
+                  summary: OIDC provider configuration
+                  value:
+                    auth_provider: "oidc"
+                    cache:
+                      type: "memory"
+                      expiration: "30m"
+                    default_roles:
+                      - "kibana_user"
+                    group_mappings:
+                      admin:
+                        - "kibana_admin"
+                    provider_config:
+                      issuer: "https://auth.example.com"
+                      client_id: "elastauth"
+                      client_secret: "***"
+                      claim_mappings:
+                        username: "preferred_username"
+                        email: "email"
+                        groups: "groups"
+                        full_name: "name"
+
+components:
+  securitySchemes:
+    AutheliaHeaders:
+      type: apiKey
+      in: header
+      name: Remote-User
+      description: |
+        Authelia header-based authentication. Requires Remote-User header 
+        and optionally Remote-Groups, Remote-Email, Remote-Name headers.
+    
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        OAuth2/OIDC JWT token authentication. The token should be a valid 
+        JWT issued by the configured OIDC provider.
+    
+    CookieAuth:
+      type: apiKey
+      in: cookie
+      name: access_token
+      description: |
+        Cookie-based authentication for OAuth2/OIDC providers. 
+        The access_token cookie should contain a valid JWT.
+
+  schemas:
+    AuthSuccess:
+      type: object
+      properties:
+        status:
+          type: string
+          example: "OK"
+          description: Authentication status
+        user:
+          type: string
+          example: "john.doe"
+          description: Authenticated username
+      required:
+        - status
+        - user
+
+    HealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          example: "OK"
+          description: Health status of the service
+      required:
+        - status
+
+    ConfigResponse:
+      type: object
+      properties:
+        auth_provider:
+          type: string
+          enum: ["authelia", "oidc"]
+          example: "authelia"
+          description: Currently active authentication provider
+        cache:
+          type: object
+          description: Cache configuration (sensitive values masked)
+          properties:
+            type:
+              type: string
+              enum: ["redis", "memory", "file", "disabled"]
+              example: "redis"
+            expiration:
+              type: string
+              example: "1h"
+              description: Cache TTL duration
+            redis_host:
+              type: string
+              example: "localhost:6379"
+              description: Redis host (only for redis cache type)
+            redis_db:
+              type: integer
+              example: 0
+              description: Redis database number (only for redis cache type)
+            path:
+              type: string
+              example: "/tmp/elastauth-cache"
+              description: File cache path (only for file cache type)
+        default_roles:
+          type: array
+          items:
+            type: string
+          example: ["kibana_user"]
+          description: Default roles assigned to all users
+        group_mappings:
+          type: object
+          additionalProperties:
+            type: array
+            items:
+              type: string
+          example:
+            admin: ["kibana_admin"]
+            developers: ["kibana_user", "dev_role"]
+          description: Mapping of user groups to Elasticsearch roles
+        provider_config:
+          type: object
+          description: Provider-specific configuration (sensitive values masked)
+          oneOf:
+            - $ref: '#/components/schemas/AutheliaProviderConfig'
+            - $ref: '#/components/schemas/OIDCProviderConfig'
+      required:
+        - auth_provider
+        - cache
+        - default_roles
+        - group_mappings
+        - provider_config
+
+    AutheliaProviderConfig:
+      type: object
+      properties:
+        header_username:
+          type: string
+          example: "Remote-User"
+          description: Header name for username
+        header_groups:
+          type: string
+          example: "Remote-Groups"
+          description: Header name for user groups
+        header_email:
+          type: string
+          example: "Remote-Email"
+          description: Header name for user email
+        header_name:
+          type: string
+          example: "Remote-Name"
+          description: Header name for user full name
+
+    OIDCProviderConfig:
+      type: object
+      properties:
+        issuer:
+          type: string
+          example: "https://auth.example.com"
+          description: OIDC issuer URL
+        client_id:
+          type: string
+          example: "elastauth"
+          description: OAuth2 client ID
+        client_secret:
+          type: string
+          example: "***"
+          description: OAuth2 client secret (always masked)
+        claim_mappings:
+          type: object
+          properties:
+            username:
+              type: string
+              example: "preferred_username"
+            email:
+              type: string
+              example: "email"
+            groups:
+              type: string
+              example: "groups"
+            full_name:
+              type: string
+              example: "name"
+          description: Mapping of JWT claims to user information
+
+    ErrorResponse:
+      type: object
+      properties:
+        message:
+          type: string
+          example: "Authentication failed"
+          description: Human-readable error message
+        code:
+          type: integer
+          example: 400
+          description: HTTP status code
+        timestamp:
+          type: string
+          format: date-time
+          example: "2024-01-15T10:30:00Z"
+          description: ISO 8601 timestamp when the error occurred
+      required:
+        - message
+        - code
+        - timestamp
+
+  examples:
+    AutheliaHeaders:
+      summary: Authelia authentication headers
+      value:
+        Remote-User: "john.doe"
+        Remote-Groups: "admin,developers"
+        Remote-Email: "john.doe@example.com"
+        Remote-Name: "John Doe"
+    
+    JWTToken:
+      summary: OIDC JWT token
+      value: "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9..."
+
+tags:
+  - name: Authentication
+    description: Authentication and authorization operations
+  - name: Health
+    description: Service health and monitoring
+  - name: Configuration
+    description: Service configuration information

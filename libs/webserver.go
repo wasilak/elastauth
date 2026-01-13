@@ -68,6 +68,8 @@ func WebserverInit(ctx context.Context) {
 	e.GET("/", MainRoute)
 	e.GET("/health", HealthRoute)
 	e.GET("/config", ConfigRoute)
+	e.GET("/docs", SwaggerUIRoute)
+	e.GET("/api/openapi.yaml", SwaggerRoute)
 
 	e.Logger.Fatal(e.Start(viper.GetString("listen")))
 }

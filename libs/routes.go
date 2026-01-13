@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"log/slog"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -13,6 +14,7 @@ import (
 	"github.com/wasilak/elastauth/cache"
 	"github.com/wasilak/elastauth/provider"
 	_ "github.com/wasilak/elastauth/provider/authelia" // Import to register Authelia provider
+	_ "github.com/wasilak/elastauth/provider/oidc"     // Import to register OIDC provider
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
@@ -27,15 +29,32 @@ type HealthResponse struct {
 	Status string `json:"status"`
 }
 
-// The type `ErrorResponse` is a struct that contains a message and code for error responses in Go.
+// AuthSuccess represents a successful authentication response
+type AuthSuccess struct {
+	Status string `json:"status"`
+	User   string `json:"user"`
+}
+
+// The type `ErrorResponse` is a struct that contains a message, code, and timestamp for error responses in Go.
 // @property {string} Message - Message is a string property that represents the error message that
 // will be returned in the response when an error occurs.
 // @property {int} Code - The `Code` property is an integer that represents an error code. It is used
 // to identify the type of error that occurred. For example, a code of 404 might indicate that a
 // requested resource was not found, while a code of 500 might indicate a server error.
+// @property {time.Time} Timestamp - The timestamp when the error occurred.
 type ErrorResponse struct {
-	Message string `json:"message"`
-	Code    int    `json:"code"`
+	Message   string    `json:"message"`
+	Code      int       `json:"code"`
+	Timestamp time.Time `json:"timestamp"`
+}
+
+// NewErrorResponse creates a new ErrorResponse with the current timestamp
+func NewErrorResponse(message string, code int) ErrorResponse {
+	return ErrorResponse{
+		Message:   message,
+		Code:      code,
+		Timestamp: time.Now().UTC(),
+	}
 }
 
 // isCacheEnabled returns true if caching is enabled and available.
@@ -133,10 +152,7 @@ func MainRoute(c echo.Context) error {
 		slog.ErrorContext(ctx, "Failed to get auth provider", slog.String("error", err.Error()))
 		spanHeader.RecordError(err)
 		spanHeader.SetStatus(codes.Error, err.Error())
-		response := ErrorResponse{
-			Message: "Internal server error",
-			Code:    http.StatusInternalServerError,
-		}
+		response := NewErrorResponse("Internal server error", http.StatusInternalServerError)
 		return c.JSON(http.StatusInternalServerError, response)
 	}
 
@@ -147,10 +163,7 @@ func MainRoute(c echo.Context) error {
 		slog.ErrorContext(ctx, "Failed to get user from provider", slog.String("error", err.Error()))
 		spanHeader.RecordError(err)
 		spanHeader.SetStatus(codes.Error, err.Error())
-		response := ErrorResponse{
-			Message: err.Error(),
-			Code:    http.StatusBadRequest,
-		}
+		response := NewErrorResponse(err.Error(), http.StatusBadRequest)
 		return c.JSON(http.StatusBadRequest, response)
 	}
 
@@ -159,10 +172,7 @@ func MainRoute(c echo.Context) error {
 		slog.ErrorContext(ctx, "Invalid username format", slog.String("error", err.Error()))
 		spanHeader.RecordError(err)
 		spanHeader.SetStatus(codes.Error, err.Error())
-		response := ErrorResponse{
-			Message: err.Error(),
-			Code:    http.StatusBadRequest,
-		}
+		response := NewErrorResponse(err.Error(), http.StatusBadRequest)
 		return c.JSON(http.StatusBadRequest, response)
 	}
 	spanHeader.End()
@@ -177,10 +187,7 @@ func MainRoute(c echo.Context) error {
 	userGroups, err := ParseAndValidateGroups(strings.Join(userInfo.Groups, ","), enableGroupWhitelist, groupWhitelist)
 	if err != nil {
 		slog.ErrorContext(ctx, "Invalid group format", slog.String("error", err.Error()))
-		response := ErrorResponse{
-			Message: err.Error(),
-			Code:    http.StatusBadRequest,
-		}
+		response := NewErrorResponse(err.Error(), http.StatusBadRequest)
 		return c.JSON(http.StatusBadRequest, response)
 	}
 
@@ -193,10 +200,7 @@ func MainRoute(c echo.Context) error {
 	if len(userEmail) > 0 {
 		if err := ValidateEmail(userEmail); err != nil {
 			slog.ErrorContext(ctx, "Invalid email format", slog.String("error", err.Error()))
-			response := ErrorResponse{
-				Message: err.Error(),
-				Code:    http.StatusBadRequest,
-			}
+			response := NewErrorResponse(err.Error(), http.StatusBadRequest)
 			return c.JSON(http.StatusBadRequest, response)
 		}
 	}
@@ -205,10 +209,7 @@ func MainRoute(c echo.Context) error {
 	if len(userName) > 0 {
 		if err := ValidateName(userName); err != nil {
 			slog.ErrorContext(ctx, "Invalid name format", slog.String("error", err.Error()))
-			response := ErrorResponse{
-				Message: err.Error(),
-				Code:    http.StatusBadRequest,
-			}
+			response := NewErrorResponse(err.Error(), http.StatusBadRequest)
 			return c.JSON(http.StatusBadRequest, response)
 		}
 	}
@@ -252,10 +253,7 @@ func MainRoute(c echo.Context) error {
 		encryptedPassword, err := Encrypt(ctx, password, key)
 		if err != nil {
 			slog.ErrorContext(ctx, "Failed to encrypt password", slog.Any("error", SanitizeForLogging(err)))
-			return c.JSON(http.StatusInternalServerError, ErrorResponse{
-				Message: "Internal server error",
-				Code:    http.StatusInternalServerError,
-			})
+			return c.JSON(http.StatusInternalServerError, NewErrorResponse("Internal server error", http.StatusInternalServerError))
 		}
 		encryptedPasswordBase64 = string(base64.URLEncoding.EncodeToString([]byte(encryptedPassword)))
 
@@ -281,20 +279,14 @@ func MainRoute(c echo.Context) error {
 			)
 			if err != nil {
 				slog.ErrorContext(ctx, "Failed to initialize Elasticsearch client", slog.Any("error", SanitizeForLogging(err)))
-				return c.JSON(http.StatusInternalServerError, ErrorResponse{
-					Message: "Internal server error",
-					Code:    http.StatusInternalServerError,
-				})
+				return c.JSON(http.StatusInternalServerError, NewErrorResponse("Internal server error", http.StatusInternalServerError))
 			}
 
 			spanCacheMiss.AddEvent("Upserting user in Elasticsearch")
 			err = UpsertUser(ctx, user, elasticsearchUser)
 			if err != nil {
 				slog.ErrorContext(ctx, "Failed to upsert user in Elasticsearch", slog.Any("error", SanitizeForLogging(err)))
-				return c.JSON(http.StatusInternalServerError, ErrorResponse{
-					Message: "Internal server error",
-					Code:    http.StatusInternalServerError,
-				})
+				return c.JSON(http.StatusInternalServerError, NewErrorResponse("Internal server error", http.StatusInternalServerError))
 			}
 		}
 
@@ -320,25 +312,23 @@ func MainRoute(c echo.Context) error {
 	decryptedPasswordBase64, err := base64.URLEncoding.DecodeString(encryptedPasswordBase64.(string))
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to decode password from cache", slog.Any("error", SanitizeForLogging(err)))
-		return c.JSON(http.StatusInternalServerError, ErrorResponse{
-			Message: "Internal server error",
-			Code:    http.StatusInternalServerError,
-		})
+		return c.JSON(http.StatusInternalServerError, NewErrorResponse("Internal server error", http.StatusInternalServerError))
 	}
 
 	decryptedPassword, err := Decrypt(ctx, string(decryptedPasswordBase64), key)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to decrypt password", slog.Any("error", SanitizeForLogging(err)))
-		return c.JSON(http.StatusInternalServerError, ErrorResponse{
-			Message: "Internal server error",
-			Code:    http.StatusInternalServerError,
-		})
+		return c.JSON(http.StatusInternalServerError, NewErrorResponse("Internal server error", http.StatusInternalServerError))
 	}
 	spanDecrypt.End()
 
 	c.Response().Header().Set(echo.HeaderAuthorization, "Basic "+basicAuth(user, decryptedPassword))
 
-	return c.NoContent(http.StatusOK)
+	response := AuthSuccess{
+		Status: "OK",
+		User:   user,
+	}
+	return c.JSON(http.StatusOK, response)
 }
 
 // HealthRoute responds to health checks with a JSON response containing the application status.
@@ -411,4 +401,66 @@ func ConfigRoute(c echo.Context) error {
 		ProviderConfig: providerConfig,
 	}
 	return c.JSON(http.StatusOK, response)
+}
+
+// SwaggerRoute serves the OpenAPI specification
+func SwaggerRoute(c echo.Context) error {
+	// Read the OpenAPI spec file
+	specBytes, err := os.ReadFile("docs/openapi.yaml")
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, NewErrorResponse("Failed to load API specification", http.StatusInternalServerError))
+	}
+
+	// Set appropriate content type for YAML
+	c.Response().Header().Set("Content-Type", "application/x-yaml")
+	return c.Blob(http.StatusOK, "application/x-yaml", specBytes)
+}
+
+// SwaggerUIRoute serves the Swagger UI interface
+func SwaggerUIRoute(c echo.Context) error {
+	html := `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>elastauth API Documentation</title>
+    <link rel="stylesheet" type="text/css" href="https://unpkg.com/swagger-ui-dist@5.10.5/swagger-ui.css" />
+    <style>
+        html {
+            box-sizing: border-box;
+            overflow: -moz-scrollbars-vertical;
+            overflow-y: scroll;
+        }
+        *, *:before, *:after {
+            box-sizing: inherit;
+        }
+        body {
+            margin:0;
+            background: #fafafa;
+        }
+    </style>
+</head>
+<body>
+    <div id="swagger-ui"></div>
+    <script src="https://unpkg.com/swagger-ui-dist@5.10.5/swagger-ui-bundle.js"></script>
+    <script src="https://unpkg.com/swagger-ui-dist@5.10.5/swagger-ui-standalone-preset.js"></script>
+    <script>
+        window.onload = function() {
+            const ui = SwaggerUIBundle({
+                url: '/api/openapi.yaml',
+                dom_id: '#swagger-ui',
+                deepLinking: true,
+                presets: [
+                    SwaggerUIBundle.presets.apis,
+                    SwaggerUIStandalonePreset
+                ],
+                plugins: [
+                    SwaggerUIBundle.plugins.DownloadUrl
+                ],
+                layout: "StandaloneLayout"
+            });
+        };
+    </script>
+</body>
+</html>`
+	return c.HTML(http.StatusOK, html)
 }

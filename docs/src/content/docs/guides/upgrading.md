@@ -3,8 +3,6 @@ title: Upgrading elastauth
 description: Guide for upgrading elastauth between major versions
 ---
 
-# Upgrading elastauth
-
 This document provides guidance for upgrading elastauth between major versions.
 
 ## Cache Configuration Breaking Changes

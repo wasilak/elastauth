@@ -3,8 +3,6 @@ title: Redis Cache Provider
 description: Configure distributed Redis caching for multi-instance deployments
 ---
 
-# Redis Cache Provider
-
 Redis cache provides distributed caching for multi-instance elastauth deployments. It's the recommended cache provider for production environments with multiple elastauth instances.
 
 ## Overview

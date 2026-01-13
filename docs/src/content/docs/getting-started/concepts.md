@@ -3,8 +3,6 @@ title: Core Concepts
 description: Understanding elastauth's architecture and key principles
 ---
 
-# elastauth Concepts
-
 ## Overview
 
 elastauth is a stateless authentication proxy that bridges authentication providers with Elasticsearch and Kibana. It acts as a middleware layer that:

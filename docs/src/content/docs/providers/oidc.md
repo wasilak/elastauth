@@ -3,8 +3,6 @@ title: OAuth2/OIDC Provider
 description: Configure JWT token authentication with OAuth2/OIDC providers
 ---
 
-# OAuth2/OIDC Provider
-
 The OAuth2/OIDC provider validates JWT tokens and extracts user information from any OAuth2/OIDC-compliant authentication system. This single provider works with multiple authentication systems through standard protocols.
 
 ## Overview

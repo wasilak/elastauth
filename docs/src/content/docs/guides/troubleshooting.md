@@ -3,8 +3,6 @@ title: Troubleshooting Guide
 description: Common issues and solutions for elastauth deployments
 ---
 
-# Troubleshooting Guide
-
 This comprehensive guide covers common issues and solutions for elastauth deployments across different environments and configurations.
 
 ## Quick Diagnosis

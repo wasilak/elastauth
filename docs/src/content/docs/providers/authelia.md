@@ -3,8 +3,6 @@ title: Authelia Provider
 description: Configure header-based authentication with Authelia
 ---
 
-# Authelia Provider
-
 The Authelia provider extracts user information from HTTP headers set by [Authelia](https://www.authelia.com/), a popular authentication and authorization server.
 
 ## Overview

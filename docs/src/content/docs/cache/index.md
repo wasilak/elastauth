@@ -3,8 +3,6 @@ title: Cache Providers
 description: Configure caching for elastauth to improve performance
 ---
 
-# Cache Providers
-
 elastauth uses the [cachego](https://github.com/wasilak/cachego) library to provide flexible caching of encrypted user credentials. Caching reduces load on Elasticsearch and improves response times.
 
 ## Available Cache Providers

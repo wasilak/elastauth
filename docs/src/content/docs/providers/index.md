@@ -3,14 +3,12 @@ title: Authentication Providers
 description: Configure authentication providers for elastauth
 ---
 
-# Authentication Providers
-
 elastauth supports multiple authentication providers through a pluggable architecture. Each provider implements a common interface while supporting different authentication mechanisms.
 
 ## Available Providers
 
-- **[Authelia](/providers/authelia)** - Header-based authentication for Authelia deployments
-- **[OAuth2/OIDC](/providers/oidc)** - Generic OAuth2/OIDC provider supporting multiple systems
+- **[Authelia](/elastauth/providers/authelia)** - Header-based authentication for Authelia deployments
+- **[OAuth2/OIDC](/elastauth/providers/oidc)** - Generic OAuth2/OIDC provider supporting multiple systems
 
 ## Provider Selection
 
@@ -77,10 +75,10 @@ To add a new authentication provider:
 3. Add configuration validation
 4. Update documentation
 
-See the [Development Guide](/guides/development) for detailed instructions.
+See the [Development Guide](/elastauth/guides/development) for detailed instructions.
 
 ## Next Steps
 
-- [Authelia Provider](/providers/authelia) - Header-based authentication
-- [OAuth2/OIDC Provider](/providers/oidc) - JWT token authentication
-- [Configuration Examples](/guides/examples) - Complete configuration examples
+- [Authelia Provider](/elastauth/providers/authelia) - Header-based authentication
+- [OAuth2/OIDC Provider](/elastauth/providers/oidc) - JWT token authentication
+- [Configuration Examples](/elastauth/guides/examples) - Complete configuration examples

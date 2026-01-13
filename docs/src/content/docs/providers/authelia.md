@@ -534,32 +534,32 @@ If migrating from direct Authelia-Elasticsearch integration:
 ## Next Steps
 
 ### Alternative Authentication
-- **[OAuth2/OIDC Provider](/providers/oidc)** - JWT token-based authentication
-  - [Keycloak Integration](/providers/oidc#keycloak-configuration) - Keycloak setup
-  - [Casdoor Integration](/providers/oidc#casdoor-configuration) - Casdoor setup
-  - [Authentik Integration](/providers/oidc#authentik-configuration) - Authentik setup
+- **[OAuth2/OIDC Provider](/elastauth/providers/oidc)** - JWT token-based authentication
+  - [Keycloak Integration](/elastauth/providers/oidc#keycloak-configuration) - Keycloak setup
+  - [Casdoor Integration](/elastauth/providers/oidc#casdoor-configuration) - Casdoor setup
+  - [Authentik Integration](/elastauth/providers/oidc#authentik-configuration) - Authentik setup
 
 ### Configuration and Optimization
-- **[Cache Configuration](/cache/)** - Optimize performance with caching
-  - [Redis Cache](/cache/redis) - Distributed caching for production
-  - [Memory Cache](/cache/) - Simple single-instance caching
-- **[Configuration Reference](/guides/configuration)** - Complete configuration options
-- **[Environment Variables](/guides/environment)** - Environment-based configuration
+- **[Cache Configuration](/elastauth/cache/)** - Optimize performance with caching
+  - [Redis Cache](/elastauth/cache/redis) - Distributed caching for production
+  - [Memory Cache](/elastauth/cache/) - Simple single-instance caching
+- **[Configuration Reference](/elastauth/guides/configuration)** - Complete configuration options
+- **[Environment Variables](/elastauth/guides/environment)** - Environment-based configuration
 
 ### Deployment and Scaling
-- **[Docker Deployment](/deployment/docker)** - Container deployment with Authelia
-- **[Kubernetes Deployment](/deployment/kubernetes)** - Production Kubernetes setup
-- **[Scaling Guide](/guides/scaling)** - Horizontal scaling considerations
-- **[Load Balancer Setup](/guides/load-balancer)** - Production load balancing
+- **[Docker Deployment](/elastauth/deployment/docker)** - Container deployment with Authelia
+- **[Kubernetes Deployment](/elastauth/deployment/kubernetes)** - Production Kubernetes setup
+- **[Scaling Guide](/elastauth/guides/scaling)** - Horizontal scaling considerations
+- **[Load Balancer Setup](/elastauth/guides/load-balancer)** - Production load balancing
 
 ### Integration and Setup
-- **[Authelia Integration Guide](/guides/authelia)** - Detailed Authelia setup
-- **[Traefik Configuration](/guides/traefik)** - Traefik forward auth setup
-- **[Nginx Configuration](/guides/nginx)** - Nginx auth_request setup
-- **[Elasticsearch Setup](/guides/elasticsearch)** - Elasticsearch configuration
+- **[Authelia Integration Guide](/elastauth/guides/authelia)** - Detailed Authelia setup
+- **[Traefik Configuration](/elastauth/guides/traefik)** - Traefik forward auth setup
+- **[Nginx Configuration](/elastauth/guides/nginx)** - Nginx auth_request setup
+- **[Elasticsearch Setup](/elastauth/guides/elasticsearch)** - Elasticsearch configuration
 
 ### Operations and Troubleshooting
-- **[Troubleshooting Authelia](/guides/troubleshooting#authelia-issues)** - Common Authelia issues
-- **[Header Debugging](/guides/header-debugging)** - HTTP header troubleshooting
-- **[Monitoring](/guides/monitoring)** - Health checks and observability
-- **[Security Best Practices](/guides/security)** - Authelia security considerations
+- **[Troubleshooting Authelia](/elastauth/guides/troubleshooting#authelia-issues)** - Common Authelia issues
+- **[Header Debugging](/elastauth/guides/header-debugging)** - HTTP header troubleshooting
+- **[Monitoring](/elastauth/guides/monitoring)** - Health checks and observability
+- **[Security Best Practices](/elastauth/guides/security)** - Authelia security considerations

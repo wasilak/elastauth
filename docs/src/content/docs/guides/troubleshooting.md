@@ -71,8 +71,8 @@ curl -v http://your-proxy/elastauth-endpoint
 ```
 
 **Solutions:**
-1. **Configure proxy to forward headers** - See [Authelia Integration Guide](/guides/authelia)
-2. **Verify header names match configuration** - Check [Authelia Provider](/providers/authelia#configuration-examples)
+1. **Configure proxy to forward headers** - See [Authelia Integration Guide](/elastauth/guides/authelia)
+2. **Verify header names match configuration** - Check [Authelia Provider](/elastauth/providers/authelia#configuration-examples)
 3. **Test Authelia configuration** - Verify Authelia is setting headers correctly
 
 #### Traefik Forward Auth Issues
@@ -138,7 +138,7 @@ curl http://elastauth:5000/config | jq .provider_config.claim_mappings
 ```
 
 **Solutions:**
-1. **Update claim mappings** - See [OIDC Provider Configuration](/providers/oidc#claim-mapping)
+1. **Update claim mappings** - See [OIDC Provider Configuration](/elastauth/providers/oidc#claim-mapping)
 2. **Check nested claims** - Use dot notation for nested claims (e.g., "realm_access.roles")
 3. **Verify provider claims** - Ensure your OIDC provider includes required claims
 
@@ -168,7 +168,7 @@ docker exec elastauth-container nslookup elasticsearch
 **Solutions:**
 1. **Check Elasticsearch status** - Ensure Elasticsearch is running
 2. **Verify network connectivity** - Check Docker networks or Kubernetes networking
-3. **Update host configuration** - See [Elasticsearch Setup Guide](/guides/elasticsearch)
+3. **Update host configuration** - See [Elasticsearch Setup Guide](/elastauth/guides/elasticsearch)
 
 #### Authentication Failures
 
@@ -189,7 +189,7 @@ curl -u elastauth:password \
 ```
 
 **Solutions:**
-1. **Create elastauth user** - See [Elasticsearch User Setup](/guides/elasticsearch#user-setup)
+1. **Create elastauth user** - See [Elasticsearch User Setup](/elastauth/guides/elasticsearch#user-setup)
 2. **Grant required permissions** - Ensure user has manage_security privilege
 3. **Update password** - Sync password between configuration and Elasticsearch
 
@@ -228,7 +228,7 @@ redis-cli -h redis-host -p 6379 -a password ping
 - Container restarts
 
 **Solutions:**
-1. **Switch to Redis cache** - See [Redis Cache Setup](/cache/redis)
+1. **Switch to Redis cache** - See [Redis Cache Setup](/elastauth/cache/redis)
 2. **Reduce cache TTL** - Lower cache expiration time
 3. **Increase memory limits** - Allocate more memory to elastauth container
 
@@ -254,7 +254,7 @@ flowchart TD
 ```
 
 **Performance Optimization:**
-1. **Enable caching** - Use [Redis cache](/cache/redis) for production
+1. **Enable caching** - Use [Redis cache](/elastauth/cache/redis) for production
 2. **Tune cache TTL** - Balance between performance and security
 3. **Scale Elasticsearch** - Add more nodes for better performance
 4. **Optimize network** - Reduce latency between components
@@ -443,17 +443,17 @@ kubectl exec elastauth-pod -- nslookup elasticsearch
 ### Support Resources
 
 - **[GitHub Issues](https://github.com/wasilak/elastauth/issues)** - Bug reports and feature requests
-- **[Documentation](/getting-started/concepts)** - Complete documentation
-- **[Configuration Examples](/guides/configuration)** - Working configuration examples
+- **[Documentation](/elastauth/getting-started/concepts)** - Complete documentation
+- **[Configuration Examples](/elastauth/guides/configuration)** - Working configuration examples
 - **[Community Discussions](https://github.com/wasilak/elastauth/discussions)** - Community support
 
 ### Related Documentation
 
-- **[Authentication Providers](/providers/)** - Provider-specific troubleshooting
-- **[Cache Configuration](/cache/)** - Cache-related issues
-- **[Deployment Guides](/deployment/)** - Deployment-specific problems
-- **[Security Guide](/guides/security)** - Security-related issues
-- **[Performance Guide](/guides/performance)** - Performance optimization
+- **[Authentication Providers](/elastauth/providers/)** - Provider-specific troubleshooting
+- **[Cache Configuration](/elastauth/cache/)** - Cache-related issues
+- **[Deployment Guides](/elastauth/deployment/)** - Deployment-specific problems
+- **[Security Guide](/elastauth/guides/security)** - Security-related issues
+- **[Performance Guide](/elastauth/guides/performance)** - Performance optimization
 
 ### Authentication Failures
 

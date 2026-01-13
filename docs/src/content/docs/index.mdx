@@ -20,8 +20,8 @@ elastauth is a stateless authentication proxy that sits between your users and E
 Get started with elastauth in minutes:
 
 ### 1. Choose Your Authentication Provider
-- **[Authelia](/providers/authelia)** - If you're using Authelia for authentication
-- **[OAuth2/OIDC](/providers/oidc)** - For Keycloak, Casdoor, Authentik, Auth0, Azure AD, and others
+- **[Authelia](/elastauth/providers/authelia)** - If you're using Authelia for authentication
+- **[OAuth2/OIDC](/elastauth/providers/oidc)** - For Keycloak, Casdoor, Authentik, Auth0, Azure AD, and others
 
 ### 2. Configure elastauth
 ```yaml
@@ -45,9 +45,9 @@ elasticsearch:
 
 ### 3. Deploy elastauth
 Choose your deployment method:
-- **[Docker](/deployment/docker)** - Quick container deployment
-- **[Kubernetes](/deployment/kubernetes)** - Production-ready orchestration
-- **[Binary](/deployment/binary)** - Direct binary deployment
+- **[Docker](/elastauth/deployment/docker)** - Quick container deployment
+- **[Kubernetes](/elastauth/deployment/kubernetes)** - Production-ready orchestration
+- **[Binary](/elastauth/deployment/binary)** - Direct binary deployment
 
 ### 4. Test Your Setup
 ```bash
@@ -149,8 +149,8 @@ sequenceDiagram
 
 elastauth supports a wide range of authentication providers:
 
-- **[Authelia](./providers/authelia)**: Header-based authentication
-- **[OAuth2/OIDC](./providers/oidc)**: Generic OAuth2/OIDC support for:
+- **[Authelia](/elastauth/providers/authelia)**: Header-based authentication
+- **[OAuth2/OIDC](/elastauth/providers/oidc)**: Generic OAuth2/OIDC support for:
   - Keycloak
   - Authentik  
   - Casdoor
@@ -161,29 +161,29 @@ elastauth supports a wide range of authentication providers:
 ## Next Steps
 
 ### 📚 Learn the Fundamentals
-- **[Core Concepts](/getting-started/concepts)** - Understand elastauth's architecture and principles
-- **[Configuration Guide](/guides/configuration)** - Complete configuration reference
-- **[Security Model](/guides/security)** - Authentication and authorization concepts
+- **[Core Concepts](/elastauth/getting-started/concepts)** - Understand elastauth's architecture and principles
+- **[Configuration Guide](/elastauth/guides/configuration)** - Complete configuration reference
+- **[Security Model](/elastauth/guides/security)** - Authentication and authorization concepts
 
 ### 🔧 Configure Authentication
-- **[Authentication Providers](/providers/)** - Choose and configure your auth system
-  - [Authelia Provider](/providers/authelia) - Header-based authentication
-  - [OAuth2/OIDC Provider](/providers/oidc) - JWT token authentication
-- **[Cache Configuration](/cache/)** - Optimize performance with caching
-  - [Redis Cache](/cache/redis) - Distributed caching for scaling
+- **[Authentication Providers](/elastauth/providers/)** - Choose and configure your auth system
+  - [Authelia Provider](/elastauth/providers/authelia) - Header-based authentication
+  - [OAuth2/OIDC Provider](/elastauth/providers/oidc) - JWT token authentication
+- **[Cache Configuration](/elastauth/cache/)** - Optimize performance with caching
+  - [Redis Cache](/elastauth/cache/redis) - Distributed caching for scaling
 
 ### 🚀 Deploy to Production
-- **[Docker Deployment](/deployment/docker)** - Container-based deployment
-- **[Kubernetes Deployment](/deployment/kubernetes)** - Production orchestration
-- **[Scaling Guide](/guides/scaling)** - Horizontal scaling considerations
-- **[Monitoring](/guides/monitoring)** - Health checks and observability
+- **[Docker Deployment](/elastauth/deployment/docker)** - Container-based deployment
+- **[Kubernetes Deployment](/elastauth/deployment/kubernetes)** - Production orchestration
+- **[Scaling Guide](/elastauth/guides/scaling)** - Horizontal scaling considerations
+- **[Monitoring](/elastauth/guides/monitoring)** - Health checks and observability
 
 ### 🔍 Operations & Troubleshooting
-- **[Troubleshooting Guide](/guides/troubleshooting)** - Common issues and solutions
-- **[Upgrading](/guides/upgrading)** - Version upgrade procedures
-- **[Performance Tuning](/guides/performance)** - Optimization best practices
+- **[Troubleshooting Guide](/elastauth/guides/troubleshooting)** - Common issues and solutions
+- **[Upgrading](/elastauth/guides/upgrading)** - Version upgrade procedures
+- **[Performance Tuning](/elastauth/guides/performance)** - Optimization best practices
 
 ### 🔗 Integration Examples
-- **[Elasticsearch Setup](/guides/elasticsearch)** - Configure Elasticsearch integration
-- **[Kibana Integration](/guides/kibana)** - Set up Kibana with elastauth
-- **[Load Balancer Configuration](/guides/load-balancer)** - Production load balancing
+- **[Elasticsearch Setup](/elastauth/guides/elasticsearch)** - Configure Elasticsearch integration
+- **[Kibana Integration](/elastauth/guides/kibana)** - Set up Kibana with elastauth
+- **[Load Balancer Configuration](/elastauth/guides/load-balancer)** - Production load balancing

@@ -746,26 +746,26 @@ curl https://your-provider.com/.well-known/jwks.json
 ## Next Steps
 
 ### Configuration and Setup
-- **[Authelia Provider](/providers/authelia)** - Alternative header-based authentication
-- **[Cache Configuration](/cache/)** - Optimize performance with caching
-  - [Redis Cache](/cache/redis) - Distributed caching for production
-  - [Memory Cache](/cache/) - Simple single-instance caching
-- **[Configuration Examples](/guides/configuration)** - Complete configuration reference
+- **[Authelia Provider](/elastauth/providers/authelia)** - Alternative header-based authentication
+- **[Cache Configuration](/elastauth/cache/)** - Optimize performance with caching
+  - [Redis Cache](/elastauth/cache/redis) - Distributed caching for production
+  - [Memory Cache](/elastauth/cache/) - Simple single-instance caching
+- **[Configuration Examples](/elastauth/guides/configuration)** - Complete configuration reference
 
 ### Deployment and Operations
-- **[Docker Deployment](/deployment/docker)** - Container deployment with OAuth2/OIDC
-- **[Kubernetes Deployment](/deployment/kubernetes)** - Production Kubernetes setup
-- **[Environment Variables](/guides/environment)** - Environment-based configuration
-- **[Scaling Guide](/guides/scaling)** - Horizontal scaling with OAuth2/OIDC
+- **[Docker Deployment](/elastauth/deployment/docker)** - Container deployment with OAuth2/OIDC
+- **[Kubernetes Deployment](/elastauth/deployment/kubernetes)** - Production Kubernetes setup
+- **[Environment Variables](/elastauth/guides/environment)** - Environment-based configuration
+- **[Scaling Guide](/elastauth/guides/scaling)** - Horizontal scaling with OAuth2/OIDC
 
 ### Integration Guides
-- **[Keycloak Integration](/guides/keycloak)** - Detailed Keycloak setup guide
-- **[Casdoor Integration](/guides/casdoor)** - Casdoor configuration examples
-- **[Authentik Integration](/guides/authentik)** - Authentik setup and configuration
-- **[Azure AD Integration](/guides/azure-ad)** - Microsoft Azure AD integration
+- **[Keycloak Integration](/elastauth/guides/keycloak)** - Detailed Keycloak setup guide
+- **[Casdoor Integration](/elastauth/guides/casdoor)** - Casdoor configuration examples
+- **[Authentik Integration](/elastauth/guides/authentik)** - Authentik setup and configuration
+- **[Azure AD Integration](/elastauth/guides/azure-ad)** - Microsoft Azure AD integration
 
 ### Troubleshooting and Monitoring
-- **[Troubleshooting OAuth2/OIDC](/guides/troubleshooting#oauth2oidc-issues)** - Common OAuth2/OIDC issues
-- **[Token Debugging](/guides/token-debugging)** - JWT token validation troubleshooting
-- **[Monitoring](/guides/monitoring)** - Health checks and observability
-- **[Security Best Practices](/guides/security)** - OAuth2/OIDC security considerations
+- **[Troubleshooting OAuth2/OIDC](/elastauth/guides/troubleshooting#oauth2oidc-issues)** - Common OAuth2/OIDC issues
+- **[Token Debugging](/elastauth/guides/token-debugging)** - JWT token validation troubleshooting
+- **[Monitoring](/elastauth/guides/monitoring)** - Health checks and observability
+- **[Security Best Practices](/elastauth/guides/security)** - OAuth2/OIDC security considerations

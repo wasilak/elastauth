@@ -2,6 +2,7 @@
 import { defineConfig } from 'astro/config';
 import starlight from '@astrojs/starlight';
 import mermaid from 'astro-mermaid';
+import starlightOpenAPI, { openAPISidebarGroups } from 'starlight-openapi';
 
 // https://astro.build/config
 export default defineConfig({
@@ -30,6 +31,19 @@ export default defineConfig({
 				baseUrl: 'https://github.com/wasilak/elastauth/edit/main/docs/',
 			},
 			lastUpdated: true,
+			plugins: [
+				// Generate the OpenAPI documentation pages
+				starlightOpenAPI([
+					{
+						base: 'api',
+						schema: './src/schemas/openapi.yaml',
+						sidebar: { 
+							label: 'API Reference',
+							collapsed: false
+						},
+					},
+				]),
+			],
 			sidebar: [
 				{
 					label: 'Getting Started',
@@ -53,6 +67,8 @@ export default defineConfig({
 						{ label: 'Upgrading', slug: 'guides/upgrading' },
 					],
 				},
+				// Add the generated OpenAPI sidebar groups
+				...openAPISidebarGroups,
 			],
 		}),
 	],

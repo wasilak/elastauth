@@ -429,27 +429,27 @@ elastauth integrates with several external systems:
 ## Next Steps
 
 ### Getting Started
-- **[Authentication Providers](/providers/)** - Configure your authentication system
-  - [Authelia Provider](/providers/authelia) - Header-based authentication setup
-  - [OAuth2/OIDC Provider](/providers/oidc) - JWT token authentication setup
-- **[Cache Providers](/cache/)** - Configure caching for performance
-  - [Redis Cache](/cache/redis) - Distributed caching for scaling
-  - [Memory Cache](/cache/) - Simple in-memory caching
+- **[Authentication Providers](/elastauth/providers/)** - Configure your authentication system
+  - [Authelia Provider](/elastauth/providers/authelia) - Header-based authentication setup
+  - [OAuth2/OIDC Provider](/elastauth/providers/oidc) - JWT token authentication setup
+- **[Cache Providers](/elastauth/cache/)** - Configure caching for performance
+  - [Redis Cache](/elastauth/cache/redis) - Distributed caching for scaling
+  - [Memory Cache](/elastauth/cache/) - Simple in-memory caching
 
 ### Configuration and Deployment
-- **[Configuration Examples](/guides/examples)** - Complete configuration examples
-- **[Docker Deployment](/deployment/docker)** - Container deployment guide
-- **[Kubernetes Deployment](/deployment/kubernetes)** - Production Kubernetes setup
-- **[Environment Variables](/guides/configuration)** - Environment-based configuration
+- **[Configuration Examples](/elastauth/guides/examples)** - Complete configuration examples
+- **[Docker Deployment](/elastauth/deployment/docker)** - Container deployment guide
+- **[Kubernetes Deployment](/elastauth/deployment/kubernetes)** - Production Kubernetes setup
+- **[Environment Variables](/elastauth/guides/configuration)** - Environment-based configuration
 
 ### Operations and Maintenance
-- **[Troubleshooting](/guides/troubleshooting)** - Common issues and solutions
-- **[Monitoring](/guides/monitoring)** - Health checks and observability
-- **[Scaling](/guides/scaling)** - Horizontal scaling considerations
-- **[Security](/guides/security)** - Security best practices
+- **[Troubleshooting](/elastauth/guides/troubleshooting)** - Common issues and solutions
+- **[Monitoring](/elastauth/guides/monitoring)** - Health checks and observability
+- **[Scaling](/elastauth/guides/scaling)** - Horizontal scaling considerations
+- **[Security](/elastauth/guides/security)** - Security best practices
 
 ### Integration Guides
-- **[Elasticsearch Setup](/guides/elasticsearch)** - Elasticsearch configuration
-- **[Kibana Integration](/guides/kibana)** - Kibana setup and configuration
-- **[Load Balancer Setup](/guides/load-balancer)** - Load balancer configuration
-- **[SSL/TLS Configuration](/guides/ssl)** - HTTPS and certificate management
+- **[Elasticsearch Setup](/elastauth/guides/elasticsearch)** - Elasticsearch configuration
+- **[Kibana Integration](/elastauth/guides/kibana)** - Kibana setup and configuration
+- **[Load Balancer Setup](/elastauth/guides/load-balancer)** - Load balancer configuration
+- **[SSL/TLS Configuration](/elastauth/guides/ssl)** - HTTPS and certificate management

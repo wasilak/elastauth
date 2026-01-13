@@ -870,31 +870,31 @@ Cache data is automatically regenerated:
 ## Next Steps
 
 ### Alternative Cache Providers
-- **[Memory Cache](/cache/)** - Simple in-memory caching for single instances
-- **[File Cache](/cache/file)** - Persistent file-based caching
-- **[Cache Comparison](/cache/comparison)** - Compare cache provider features
+- **[Memory Cache](/elastauth/cache/)** - Simple in-memory caching for single instances
+- **[File Cache](/elastauth/cache/file)** - Persistent file-based caching
+- **[Cache Comparison](/elastauth/cache/comparison)** - Compare cache provider features
 
 ### Configuration and Integration
-- **[Authentication Providers](/providers/)** - Configure authentication with Redis cache
-  - [Authelia with Redis](/providers/authelia#production-multi-instance-setup) - Authelia + Redis setup
-  - [OAuth2/OIDC with Redis](/providers/oidc#production-multi-provider-setup) - OIDC + Redis setup
-- **[Configuration Reference](/guides/configuration)** - Complete configuration options
-- **[Environment Variables](/guides/environment)** - Environment-based configuration
+- **[Authentication Providers](/elastauth/providers/)** - Configure authentication with Redis cache
+  - [Authelia with Redis](/elastauth/providers/authelia#production-multi-instance-setup) - Authelia + Redis setup
+  - [OAuth2/OIDC with Redis](/elastauth/providers/oidc#production-multi-provider-setup) - OIDC + Redis setup
+- **[Configuration Reference](/elastauth/guides/configuration)** - Complete configuration options
+- **[Environment Variables](/elastauth/guides/environment)** - Environment-based configuration
 
 ### Deployment and Scaling
-- **[Docker Deployment](/deployment/docker)** - Container deployment with Redis
-- **[Kubernetes Deployment](/deployment/kubernetes)** - Production Kubernetes setup
-- **[Scaling Guide](/guides/scaling)** - Horizontal scaling with Redis cache
-- **[Load Balancer Setup](/guides/load-balancer)** - Production load balancing
+- **[Docker Deployment](/elastauth/deployment/docker)** - Container deployment with Redis
+- **[Kubernetes Deployment](/elastauth/deployment/kubernetes)** - Production Kubernetes setup
+- **[Scaling Guide](/elastauth/guides/scaling)** - Horizontal scaling with Redis cache
+- **[Load Balancer Setup](/elastauth/guides/load-balancer)** - Production load balancing
 
 ### Operations and Monitoring
-- **[Redis Monitoring](/guides/redis-monitoring)** - Redis performance monitoring
-- **[Cache Performance](/guides/cache-performance)** - Cache optimization strategies
-- **[Troubleshooting Redis](/guides/troubleshooting#redis-cache-issues)** - Common Redis issues
-- **[Backup and Recovery](/guides/backup-recovery)** - Redis backup strategies
+- **[Redis Monitoring](/elastauth/guides/redis-monitoring)** - Redis performance monitoring
+- **[Cache Performance](/elastauth/guides/cache-performance)** - Cache optimization strategies
+- **[Troubleshooting Redis](/elastauth/guides/troubleshooting#redis-cache-issues)** - Common Redis issues
+- **[Backup and Recovery](/elastauth/guides/backup-recovery)** - Redis backup strategies
 
 ### Security and Best Practices
-- **[Redis Security](/guides/redis-security)** - Redis security configuration
-- **[Network Security](/guides/network-security)** - Secure Redis networking
-- **[Performance Tuning](/guides/performance-tuning)** - Redis performance optimization
-- **[High Availability](/guides/high-availability)** - Redis clustering and failover
+- **[Redis Security](/elastauth/guides/redis-security)** - Redis security configuration
+- **[Network Security](/elastauth/guides/network-security)** - Secure Redis networking
+- **[Performance Tuning](/elastauth/guides/performance-tuning)** - Redis performance optimization
+- **[High Availability](/elastauth/guides/high-availability)** - Redis clustering and failover

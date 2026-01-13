@@ -75,6 +75,7 @@ func TestIntegration_CompleteAuthFlow_CacheMiss(t *testing.T) {
 	c := e.NewContext(req, rec)
 
 	testKey := generateTestKeyForIntegration()
+	viper.Set("auth_provider", "authelia")
 	viper.Set("headers_username", "Remote-User")
 	viper.Set("headers_groups", "Remote-Groups")
 	viper.Set("headers_email", "Remote-Email")
@@ -138,6 +139,7 @@ func TestIntegration_CompleteAuthFlow_CacheHit(t *testing.T) {
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
 
+	viper.Set("auth_provider", "authelia")
 	viper.Set("headers_username", "Remote-User")
 	viper.Set("headers_groups", "Remote-Groups")
 	viper.Set("enable_group_whitelist", false)
@@ -171,6 +173,7 @@ func TestIntegration_CacheHitMissTransition(t *testing.T) {
 
 	testKey := generateTestKeyForIntegration()
 
+	viper.Set("auth_provider", "authelia")
 	viper.Set("headers_username", "Remote-User")
 	viper.Set("headers_groups", "Remote-Groups")
 	viper.Set("headers_email", "Remote-Email")
@@ -225,6 +228,7 @@ func TestIntegration_CompleteAuthFlow_WithExtendCache(t *testing.T) {
 
 	testKey := generateTestKeyForIntegration()
 
+	viper.Set("auth_provider", "authelia")
 	viper.Set("headers_username", "Remote-User")
 	viper.Set("headers_groups", "Remote-Groups")
 	viper.Set("headers_email", "Remote-Email")
@@ -281,6 +285,7 @@ func TestIntegration_CompleteAuthFlow_InvalidEmail(t *testing.T) {
 	c := e.NewContext(req, rec)
 
 	testKey := generateTestKeyForIntegration()
+	viper.Set("auth_provider", "authelia")
 	viper.Set("headers_username", "Remote-User")
 	viper.Set("headers_groups", "Remote-Groups")
 	viper.Set("headers_email", "Remote-Email")
@@ -307,6 +312,7 @@ func TestIntegration_CompleteAuthFlow_InvalidName(t *testing.T) {
 	c := e.NewContext(req, rec)
 
 	testKey := generateTestKeyForIntegration()
+	viper.Set("auth_provider", "authelia")
 	viper.Set("headers_username", "Remote-User")
 	viper.Set("headers_groups", "Remote-Groups")
 	viper.Set("headers_name", "Remote-Name")
@@ -333,6 +339,7 @@ func TestIntegration_CompleteAuthFlow_NoGroups(t *testing.T) {
 	c := e.NewContext(req, rec)
 
 	testKey := generateTestKeyForIntegration()
+	viper.Set("auth_provider", "authelia")
 	viper.Set("headers_username", "Remote-User")
 	viper.Set("headers_groups", "Remote-Groups")
 	viper.Set("enable_group_whitelist", false)
@@ -369,6 +376,7 @@ func TestIntegration_CompleteAuthFlow_MultipleGropsWithRoleMappings(t *testing.T
 	c := e.NewContext(req, rec)
 
 	testKey := generateTestKeyForIntegration()
+	viper.Set("auth_provider", "authelia")
 	viper.Set("headers_username", "Remote-User")
 	viper.Set("headers_groups", "Remote-Groups")
 	viper.Set("headers_email", "Remote-Email")
@@ -408,6 +416,7 @@ func TestIntegration_DryRunMode(t *testing.T) {
 	c := e.NewContext(req, rec)
 
 	testKey := generateTestKeyForIntegration()
+	viper.Set("auth_provider", "authelia")
 	viper.Set("headers_username", "Remote-User")
 	viper.Set("headers_groups", "Remote-Groups")
 	viper.Set("headers_email", "Remote-Email")
@@ -445,6 +454,7 @@ func TestIntegration_DecryptionFailure_CorruptedCacheData(t *testing.T) {
 	c := e.NewContext(req, rec)
 
 	testKey := generateTestKeyForIntegration()
+	viper.Set("auth_provider", "authelia")
 	viper.Set("headers_username", "Remote-User")
 	viper.Set("headers_groups", "Remote-Groups")
 	viper.Set("enable_group_whitelist", false)
@@ -470,6 +480,7 @@ func TestIntegration_ElasticsearchConnectionError(t *testing.T) {
 	c := e.NewContext(req, rec)
 
 	testKey := generateTestKeyForIntegration()
+	viper.Set("auth_provider", "authelia")
 	viper.Set("headers_username", "Remote-User")
 	viper.Set("headers_groups", "Remote-Groups")
 	viper.Set("headers_email", "Remote-Email")
@@ -504,6 +515,7 @@ func TestIntegration_SpecialCharactersInUsername(t *testing.T) {
 	c := e.NewContext(req, rec)
 
 	testKey := generateTestKeyForIntegration()
+	viper.Set("auth_provider", "authelia")
 	viper.Set("headers_username", "Remote-User")
 	viper.Set("headers_groups", "Remote-Groups")
 	viper.Set("headers_email", "Remote-Email")

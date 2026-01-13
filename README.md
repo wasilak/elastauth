@@ -110,6 +110,21 @@ secret_key: "your-32-character-secret-key"
 - **Role Mapping** - Map user groups to Elasticsearch roles
 - **Horizontal Scaling** - Multi-instance support with Redis cache
 
+## 📥 Installation
+
+### Quick Clone (Recommended)
+For faster cloning, use shallow clone to avoid downloading full history:
+```bash
+git clone --depth 1 https://github.com/wasilak/elastauth.git
+```
+
+### Full Clone
+```bash
+git clone https://github.com/wasilak/elastauth.git
+```
+
+> **Note:** This repository contains historical `node_modules` in git history from documentation development. While these are now properly ignored, they increase the full clone size. Use `--depth 1` for faster downloads.
+
 ## 🐳 Docker
 
 ```bash

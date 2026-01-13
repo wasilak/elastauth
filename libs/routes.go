@@ -20,6 +20,9 @@ import (
 	"go.opentelemetry.io/otel/codes"
 )
 
+// startTime records when the application started
+var startTime = time.Now()
+
 // The HealthResponse type is a struct in Go that contains a single field called Status, which is a
 // string that will be represented as "status" in JSON.
 // @property {string} Status - The `Status` property is a string field that represents the status of a
@@ -27,6 +30,28 @@ import (
 // serialized to JSON, the field name will be "status".
 type HealthResponse struct {
 	Status string `json:"status"`
+}
+
+// ReadinessResponse represents the response for readiness probe
+type ReadinessResponse struct {
+	Status       string                 `json:"status"`
+	Checks       map[string]CheckResult `json:"checks"`
+	Timestamp    string                 `json:"timestamp"`
+	Version      string                 `json:"version,omitempty"`
+}
+
+// LivenessResponse represents the response for liveness probe
+type LivenessResponse struct {
+	Status    string `json:"status"`
+	Timestamp string `json:"timestamp"`
+	Uptime    string `json:"uptime"`
+}
+
+// CheckResult represents the result of a health check
+type CheckResult struct {
+	Status  string `json:"status"`
+	Message string `json:"message,omitempty"`
+	Error   string `json:"error,omitempty"`
 }
 
 // AuthSuccess represents a successful authentication response
@@ -350,6 +375,179 @@ func HealthRoute(c echo.Context) error {
 	}
 
 	return c.JSON(http.StatusOK, response)
+}
+
+// ReadinessRoute responds to Kubernetes readiness probes
+// It checks if the application is ready to serve traffic
+func ReadinessRoute(c echo.Context) error {
+	tracer := otel.Tracer("ReadinessRoute")
+	ctx, span := tracer.Start(c.Request().Context(), "readiness_check")
+	defer span.End()
+
+	checks := make(map[string]CheckResult)
+	overallStatus := "OK"
+	httpStatus := http.StatusOK
+
+	// Check Elasticsearch connectivity
+	elasticsearchCheck := checkElasticsearchReadiness(ctx)
+	checks["elasticsearch"] = elasticsearchCheck
+	if elasticsearchCheck.Status != "OK" {
+		overallStatus = "NOT_READY"
+		httpStatus = http.StatusServiceUnavailable
+	}
+
+	// Check cache connectivity
+	cacheCheck := checkCacheReadiness(ctx)
+	checks["cache"] = cacheCheck
+	if cacheCheck.Status != "OK" {
+		overallStatus = "NOT_READY"
+		httpStatus = http.StatusServiceUnavailable
+	}
+
+	// Check provider configuration
+	providerCheck := checkProviderReadiness(ctx)
+	checks["provider"] = providerCheck
+	if providerCheck.Status != "OK" {
+		overallStatus = "NOT_READY"
+		httpStatus = http.StatusServiceUnavailable
+	}
+
+	response := ReadinessResponse{
+		Status:    overallStatus,
+		Checks:    checks,
+		Timestamp: time.Now().UTC().Format(time.RFC3339),
+		Version:   GetAppVersion(),
+	}
+
+	return c.JSON(httpStatus, response)
+}
+
+// LivenessRoute responds to Kubernetes liveness probes
+// It checks if the application is alive and should not be restarted
+func LivenessRoute(c echo.Context) error {
+	tracer := otel.Tracer("LivenessRoute")
+	_, span := tracer.Start(c.Request().Context(), "liveness_check")
+	defer span.End()
+
+	uptime := time.Since(startTime).String()
+
+	response := LivenessResponse{
+		Status:    "OK",
+		Timestamp: time.Now().UTC().Format(time.RFC3339),
+		Uptime:    uptime,
+	}
+
+	return c.JSON(http.StatusOK, response)
+}
+
+// checkElasticsearchReadiness checks if Elasticsearch is accessible
+func checkElasticsearchReadiness(ctx context.Context) CheckResult {
+	if GetElasticsearchDryRun() {
+		return CheckResult{
+			Status:  "OK",
+			Message: "Elasticsearch dry run mode - skipping connectivity check",
+		}
+	}
+
+	hosts := GetElasticsearchHosts()
+	if len(hosts) == 0 {
+		return CheckResult{
+			Status: "ERROR",
+			Error:  "No Elasticsearch hosts configured",
+		}
+	}
+
+	// Try to initialize Elasticsearch client to test connectivity
+	err := initElasticClient(ctx, hosts, GetElasticsearchUsername(), GetElasticsearchPassword())
+	if err != nil {
+		return CheckResult{
+			Status: "ERROR",
+			Error:  err.Error(),
+		}
+	}
+
+	return CheckResult{
+		Status:  "OK",
+		Message: "Elasticsearch connectivity verified",
+	}
+}
+
+// checkCacheReadiness checks if cache is accessible
+// checkCacheReadiness checks if cache is accessible
+func checkCacheReadiness(ctx context.Context) CheckResult {
+	cacheConfig := GetEffectiveCacheConfig()
+	cacheType := cacheConfig["type"].(string)
+
+	if cacheType == "disabled" {
+		return CheckResult{
+			Status:  "OK",
+			Message: "Cache disabled - no connectivity check needed",
+		}
+	}
+
+	// Test cache connectivity by trying to set and get a test value
+	testKey := "elastauth-readiness-check"
+	testValue := "ok"
+
+	// Try to set a test value
+	setCachedItem(ctx, testKey, testValue)
+
+	// Try to get the test value back
+	retrievedValue, exists := getCachedItem(ctx, testKey)
+	if !exists {
+		return CheckResult{
+			Status: "ERROR",
+			Error:  "Cache write/read test failed - value not found",
+		}
+	}
+
+	if retrievedValue != testValue {
+		return CheckResult{
+			Status: "ERROR",
+			Error:  "Cache write/read test failed - value mismatch",
+		}
+	}
+
+	return CheckResult{
+		Status:  "OK",
+		Message: "Cache connectivity verified",
+	}
+}
+
+// checkProviderReadiness checks if the auth provider is properly configured
+func checkProviderReadiness(ctx context.Context) CheckResult {
+	authProvider, err := getAuthProvider()
+	if err != nil {
+		return CheckResult{
+			Status: "ERROR",
+			Error:  err.Error(),
+		}
+	}
+
+	// Validate provider configuration
+	if validator, ok := authProvider.(interface{ Validate() error }); ok {
+		if err := validator.Validate(); err != nil {
+			return CheckResult{
+				Status: "ERROR",
+				Error:  err.Error(),
+			}
+		}
+	}
+
+	return CheckResult{
+		Status:  "OK",
+		Message: "Auth provider configuration verified",
+	}
+}
+
+// GetAppVersion returns the application version
+func GetAppVersion() string {
+	// This could be set via build flags or environment variables
+	version := os.Getenv("APP_VERSION")
+	if version == "" {
+		version = "development"
+	}
+	return version
 }
 
 // ConfigRoute returns the application's configuration for default roles and group-to-role mappings.

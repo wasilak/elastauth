@@ -35,6 +35,22 @@ export default defineConfig({
 					label: 'Getting Started',
 					items: [
 						{ label: 'Introduction', slug: 'index' },
+						{ label: 'Concepts', slug: 'getting-started/concepts' },
+					],
+				},
+				{
+					label: 'Authentication Providers',
+					autogenerate: { directory: 'providers' },
+				},
+				{
+					label: 'Cache Providers',
+					autogenerate: { directory: 'cache' },
+				},
+				{
+					label: 'Guides',
+					items: [
+						{ label: 'Troubleshooting', slug: 'guides/troubleshooting' },
+						{ label: 'Upgrading', slug: 'guides/upgrading' },
 					],
 				},
 			],

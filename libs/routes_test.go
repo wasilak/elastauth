@@ -32,6 +32,121 @@ func TestHealthRoute(t *testing.T) {
 	}
 }
 
+func TestReadinessRoute(t *testing.T) {
+	ctx := context.Background()
+	
+	// Set up test configuration
+	viper.Set("elasticsearch_host", "http://localhost:9200")
+	viper.Set("elasticsearch_username", "test")
+	viper.Set("elasticsearch_password", "test")
+	viper.Set("elasticsearch.dry_run", true) // Use dry run to avoid actual connections
+	viper.Set("cache.type", "memory")
+	viper.Set("auth_provider", "authelia")
+	viper.Set("secret_key", generateTestKey())
+	
+	// Set up Authelia provider configuration
+	viper.Set("headers_username", "Remote-User")
+	viper.Set("headers_groups", "Remote-Groups")
+	viper.Set("headers_email", "Remote-Email")
+	viper.Set("headers_name", "Remote-Name")
+
+	// Initialize cache for the test
+	cache.CacheInit(ctx)
+
+	defer func() {
+		viper.Set("elasticsearch_host", "")
+		viper.Set("elasticsearch_username", "")
+		viper.Set("elasticsearch_password", "")
+		viper.Set("elasticsearch.dry_run", false)
+		viper.Set("cache.type", "")
+		viper.Set("auth_provider", "")
+		viper.Set("secret_key", "")
+		viper.Set("headers_username", "")
+		viper.Set("headers_groups", "")
+		viper.Set("headers_email", "")
+		viper.Set("headers_name", "")
+	}()
+
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodGet, "/ready", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+
+	if assert.NoError(t, ReadinessRoute(c)) {
+		assert.Equal(t, http.StatusOK, rec.Code)
+		
+		var response ReadinessResponse
+		err := json.Unmarshal(rec.Body.Bytes(), &response)
+		assert.NoError(t, err)
+		
+		assert.Equal(t, "OK", response.Status)
+		assert.Contains(t, response.Checks, "elasticsearch")
+		assert.Contains(t, response.Checks, "cache")
+		assert.Contains(t, response.Checks, "provider")
+		assert.NotEmpty(t, response.Timestamp)
+		
+		// All checks should be OK
+		assert.Equal(t, "OK", response.Checks["elasticsearch"].Status)
+		assert.Equal(t, "OK", response.Checks["cache"].Status)
+		assert.Equal(t, "OK", response.Checks["provider"].Status)
+	}
+}
+
+func TestLivenessRoute(t *testing.T) {
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodGet, "/live", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+
+	if assert.NoError(t, LivenessRoute(c)) {
+		assert.Equal(t, http.StatusOK, rec.Code)
+		
+		var response LivenessResponse
+		err := json.Unmarshal(rec.Body.Bytes(), &response)
+		assert.NoError(t, err)
+		
+		assert.Equal(t, "OK", response.Status)
+		assert.NotEmpty(t, response.Timestamp)
+		assert.NotEmpty(t, response.Uptime)
+	}
+}
+
+func TestReadinessRoute_ElasticsearchFailure(t *testing.T) {
+	// Set up test configuration with invalid Elasticsearch
+	viper.Set("elasticsearch_host", "http://localhost:99999") // Invalid port
+	viper.Set("elasticsearch_username", "test")
+	viper.Set("elasticsearch_password", "test")
+	viper.Set("elasticsearch_dry_run", false) // Don't use dry run to test actual failure
+	viper.Set("cache.type", "memory")
+	viper.Set("auth_provider", "authelia")
+
+	defer func() {
+		viper.Set("elasticsearch_host", "")
+		viper.Set("elasticsearch_username", "")
+		viper.Set("elasticsearch_password", "")
+		viper.Set("elasticsearch_dry_run", false)
+		viper.Set("cache.type", "")
+		viper.Set("auth_provider", "")
+	}()
+
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodGet, "/ready", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+
+	if assert.NoError(t, ReadinessRoute(c)) {
+		assert.Equal(t, http.StatusServiceUnavailable, rec.Code)
+		
+		var response ReadinessResponse
+		err := json.Unmarshal(rec.Body.Bytes(), &response)
+		assert.NoError(t, err)
+		
+		assert.Equal(t, "NOT_READY", response.Status)
+		assert.Equal(t, "ERROR", response.Checks["elasticsearch"].Status)
+		assert.NotEmpty(t, response.Checks["elasticsearch"].Error)
+	}
+}
+
 func TestConfigRoute(t *testing.T) {
 	// Setup
 	e := echo.New()
@@ -139,6 +254,8 @@ func TestMainRoute_InvalidUsername_ValidationFails(t *testing.T) {
 
 	viper.Set("headers_username", "Remote-User")
 	viper.Set("headers_groups", "Remote-Groups")
+	viper.Set("headers_email", "Remote-Email")
+	viper.Set("headers_name", "Remote-Name")
 	viper.Set("enable_group_whitelist", false)
 	viper.Set("secret_key", generateTestKey())
 
@@ -161,6 +278,8 @@ func TestMainRoute_InvalidGroup_ValidationFails(t *testing.T) {
 
 	viper.Set("headers_username", "Remote-User")
 	viper.Set("headers_groups", "Remote-Groups")
+	viper.Set("headers_email", "Remote-Email")
+	viper.Set("headers_name", "Remote-Name")
 	viper.Set("enable_group_whitelist", false)
 	viper.Set("secret_key", generateTestKey())
 
@@ -181,6 +300,8 @@ func TestMainRoute_MissingUsername_BadRequest(t *testing.T) {
 
 	viper.Set("headers_username", "Remote-User")
 	viper.Set("headers_groups", "Remote-Groups")
+	viper.Set("headers_email", "Remote-Email")
+	viper.Set("headers_name", "Remote-Name")
 
 	err := MainRoute(c)
 
@@ -201,6 +322,8 @@ func TestMainRoute_GroupWhitelistEnforced(t *testing.T) {
 
 	viper.Set("headers_username", "Remote-User")
 	viper.Set("headers_groups", "Remote-Groups")
+	viper.Set("headers_email", "Remote-Email")
+	viper.Set("headers_name", "Remote-Name")
 	viper.Set("enable_group_whitelist", true)
 	viper.Set("group_whitelist", []string{"admin", "users"})
 	viper.Set("secret_key", generateTestKey())

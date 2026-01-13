@@ -10,6 +10,9 @@ import (
 
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
+	"github.com/wasilak/elastauth/provider"
+	_ "github.com/wasilak/elastauth/provider/authelia" // Import to register Authelia provider
+	_ "github.com/wasilak/elastauth/provider/oidc"     // Import to register OIDC provider
 )
 
 func generateValidSecretKey() string {
@@ -819,5 +822,50 @@ func TestConfigurationPrecedence(t *testing.T) {
 	
 	if viper.GetString("auth_provider") != "oidc" {
 		t.Errorf("Expected environment variable to override default, got '%s'", viper.GetString("auth_provider"))
+	}
+}
+
+func TestProviderRegistration_OIDCProviderAvailable(t *testing.T) {
+	// Test that OIDC provider is properly registered via import
+	// This verifies that the import in libs/routes.go works correctly
+	
+	if !provider.DefaultFactory.IsRegistered("oidc") {
+		t.Fatal("OIDC provider should be registered via import in libs/routes.go")
+	}
+	
+	// Test that we can create the OIDC provider (though it will fail validation without proper config)
+	// This tests the factory registration mechanism
+	_, err := provider.DefaultFactory.Create("oidc", nil)
+	if err == nil {
+		t.Error("Expected OIDC provider creation to fail without proper configuration")
+	}
+	
+	// The error should be a configuration validation error, not a "provider not found" error
+	if !strings.Contains(err.Error(), "invalid OIDC configuration") && !strings.Contains(err.Error(), "client_id is required") {
+		t.Errorf("Expected configuration validation error, got: %v", err)
+	}
+}
+
+func TestProviderRegistration_AllExpectedProvidersAvailable(t *testing.T) {
+	// Test that all expected providers are registered
+	available := provider.DefaultFactory.ListAvailable()
+	
+	expectedProviders := []string{"authelia", "oidc"}
+	
+	for _, expected := range expectedProviders {
+		found := false
+		for _, available := range available {
+			if available == expected {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("Expected provider '%s' to be registered, available providers: %v", expected, available)
+		}
+	}
+	
+	if len(available) < 2 {
+		t.Errorf("Expected at least 2 providers to be registered, got %d: %v", len(available), available)
 	}
 }

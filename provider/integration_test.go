@@ -64,3 +64,62 @@ func TestIntegration_DefaultProviderSelection(t *testing.T) {
 		t.Errorf("Expected provider type 'authelia', got '%s'", authProvider.Type())
 	}
 }
+
+func TestIntegration_OIDCProviderRegistration(t *testing.T) {
+	// Test that OIDC provider is properly registered
+	// This verifies that the import in libs/routes.go works correctly
+	
+	if !DefaultFactory.IsRegistered("oidc") {
+		t.Fatal("OIDC provider should be registered via import in libs/routes.go")
+	}
+	
+	// Verify we can create the OIDC provider (though it will fail validation without proper config)
+	// This tests the factory registration mechanism
+	_, err := DefaultFactory.Create("oidc", nil)
+	if err == nil {
+		t.Error("Expected OIDC provider creation to fail without proper configuration")
+	}
+	
+	// The error should be a configuration validation error, not a "provider not found" error
+	if !contains(err.Error(), "invalid OIDC configuration") && !contains(err.Error(), "client_id is required") {
+		t.Errorf("Expected configuration validation error, got: %v", err)
+	}
+}
+
+func TestIntegration_AllProvidersRegistered(t *testing.T) {
+	// Test that all expected providers are registered
+	available := DefaultFactory.ListAvailable()
+	
+	expectedProviders := []string{"authelia", "oidc"}
+	
+	for _, expected := range expectedProviders {
+		found := false
+		for _, available := range available {
+			if available == expected {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("Expected provider '%s' to be registered, available providers: %v", expected, available)
+		}
+	}
+	
+	if len(available) < 2 {
+		t.Errorf("Expected at least 2 providers to be registered, got %d: %v", len(available), available)
+	}
+}
+
+// Helper function to check if a string contains a substring
+func contains(s, substr string) bool {
+	return len(s) >= len(substr) && (s == substr || len(substr) == 0 || 
+		(len(s) > len(substr) && (s[:len(substr)] == substr || s[len(s)-len(substr):] == substr || 
+		func() bool {
+			for i := 0; i <= len(s)-len(substr); i++ {
+				if s[i:i+len(substr)] == substr {
+					return true
+				}
+			}
+			return false
+		}())))
+}

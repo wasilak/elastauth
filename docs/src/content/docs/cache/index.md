@@ -217,7 +217,4 @@ CACHE_PATH="/var/cache/elastauth"
 
 ## Next Steps
 
-- [Memory Cache](/elastauth/cache/memory) - In-memory caching configuration
 - [Redis Cache](/elastauth/cache/redis) - Distributed caching setup
-- [File Cache](/elastauth/cache/file) - File-based caching options
-- [Configuration Examples](/elastauth/guides/examples) - Complete configuration examples

@@ -435,19 +435,7 @@ elastauth integrates with several external systems:
   - [Memory Cache](/elastauth/cache/) - Simple in-memory caching
 
 ### Configuration and Deployment
-- **[Configuration Examples](/elastauth/guides/examples)** - Complete configuration examples
-- **[Docker Deployment](/elastauth/deployment/docker)** - Container deployment guide
-- **[Kubernetes Deployment](/elastauth/deployment/kubernetes)** - Production Kubernetes setup
-- **[Environment Variables](/elastauth/guides/configuration)** - Environment-based configuration
+Refer to the main README for deployment instructions and configuration examples.
 
 ### Operations and Maintenance
 - **[Troubleshooting](/elastauth/guides/troubleshooting)** - Common issues and solutions
-- **[Monitoring](/elastauth/guides/monitoring)** - Health checks and observability
-- **[Scaling](/elastauth/guides/scaling)** - Horizontal scaling considerations
-- **[Security](/elastauth/guides/security)** - Security best practices
-
-### Integration Guides
-- **[Elasticsearch Setup](/elastauth/guides/elasticsearch)** - Elasticsearch configuration
-- **[Kibana Integration](/elastauth/guides/kibana)** - Kibana setup and configuration
-- **[Load Balancer Setup](/elastauth/guides/load-balancer)** - Load balancer configuration
-- **[SSL/TLS Configuration](/elastauth/guides/ssl)** - HTTPS and certificate management

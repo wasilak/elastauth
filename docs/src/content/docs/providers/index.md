@@ -75,10 +75,7 @@ To add a new authentication provider:
 3. Add configuration validation
 4. Update documentation
 
-See the [Development Guide](/elastauth/guides/development) for detailed instructions.
-
 ## Next Steps
 
 - [Authelia Provider](/elastauth/providers/authelia) - Header-based authentication
 - [OAuth2/OIDC Provider](/elastauth/providers/oidc) - JWT token authentication
-- [Configuration Examples](/elastauth/guides/examples) - Complete configuration examples

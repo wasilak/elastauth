@@ -296,7 +296,7 @@ Transform elastauth from an Authelia-specific authentication proxy into a plugga
   - **Property 16: Starlight Feature Integration**
   - **Validates: Requirements 17.3, 17.4, 17.11**
 
-- [ ] 6.7 Set up GitHub Pages deployment workflow
+- [x] 6.7 Set up GitHub Pages deployment workflow
   - Create GitHub Actions workflow for documentation deployment
   - Configure workflow to use Node.js 24 and Task runner
   - Set up build process with docs:install and docs:build tasks
@@ -312,11 +312,12 @@ Transform elastauth from an Authelia-specific authentication proxy into a plugga
   - Integrate with existing Taskfile.yml structure
   - _Requirements: 17.7_
 
-- [ ] 6.9 Migrate OpenAPI specification to Starlight
+- [x] 6.9 Migrate OpenAPI specification to Starlight
   - Convert docs/openapi.yaml to Starlight API documentation
   - Create dedicated API reference section
   - Add interactive API documentation if possible
   - Maintain existing OpenAPI specification functionality
+  - added and important: use this integration: https://github.com/HiDeoo/starlight-openapi?tab=readme-ov-file
   - _Requirements: 17.1, 17.5_
 
 - [ ] 6.10 Final documentation testing and validation

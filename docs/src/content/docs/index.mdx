@@ -19,35 +19,130 @@ elastauth is a stateless authentication proxy that sits between your users and E
 
 Get started with elastauth in minutes:
 
-1. [Install elastauth](./getting-started/installation)
-2. [Configure your authentication provider](./getting-started/configuration)
-3. [Deploy to your infrastructure](./deployment/docker)
+### 1. Choose Your Authentication Provider
+- **[Authelia](/providers/authelia)** - If you're using Authelia for authentication
+- **[OAuth2/OIDC](/providers/oidc)** - For Keycloak, Casdoor, Authentik, Auth0, Azure AD, and others
+
+### 2. Configure elastauth
+```yaml
+# Basic configuration example
+auth_provider: "oidc"  # or "authelia"
+
+oidc:
+  issuer: "https://your-auth-provider.com"
+  client_id: "elastauth"
+  client_secret: "${OIDC_CLIENT_SECRET}"
+
+cache:
+  type: "redis"  # or "memory" for single instance
+  redis_host: "redis:6379"
+
+elasticsearch:
+  hosts: ["https://elasticsearch:9200"]
+  username: "elastauth"
+  password: "${ELASTICSEARCH_PASSWORD}"
+```
+
+### 3. Deploy elastauth
+Choose your deployment method:
+- **[Docker](/deployment/docker)** - Quick container deployment
+- **[Kubernetes](/deployment/kubernetes)** - Production-ready orchestration
+- **[Binary](/deployment/binary)** - Direct binary deployment
+
+### 4. Test Your Setup
+```bash
+# Test authentication endpoint
+curl -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+     http://elastauth:5000/
+
+# Use returned authorization header with Elasticsearch
+curl -H "Authorization: Basic base64encodedcreds" \
+     https://elasticsearch:9200/_cluster/health
+```
 
 ## Architecture Overview
 
+elastauth uses a pluggable architecture that supports multiple authentication providers while maintaining a stateless design perfect for horizontal scaling.
+
 ```mermaid
 graph TB
-    subgraph "Authentication Providers"
-        A[Authelia Headers]
-        O[OAuth2/OIDC Providers]
+    subgraph "Client Layer"
+        U[Users/Applications]
+        K[Kibana Dashboard]
+        API[API Clients]
     end
     
-    subgraph "elastauth Core"
-        R[HTTP Request] --> PF[Provider Factory]
-        PF --> AP[Auth Provider Interface]
-        AP --> CM[Cache Manager]
-        CM --> EM[Elasticsearch Manager]
+    subgraph "Authentication Layer"
+        A[Authelia]
+        KC[Keycloak]
+        CD[Casdoor]
+        AT[Authentik]
+        A0[Auth0]
+        AZ[Azure AD]
     end
     
-    subgraph "Storage"
+    subgraph "elastauth Proxy"
+        EA[elastauth Instance 1]
+        EB[elastauth Instance 2]
+        EC[elastauth Instance N]
+    end
+    
+    subgraph "Storage Layer"
         RC[Redis Cache]
-        ES[Elasticsearch]
+        ES[Elasticsearch Cluster]
     end
     
-    A --> AP
-    O --> AP
-    CM --> RC
-    EM --> ES
+    U --> EA
+    K --> EB
+    API --> EC
+    
+    A -.-> EA
+    KC -.-> EA
+    CD -.-> EB
+    AT -.-> EB
+    A0 -.-> EC
+    AZ -.-> EC
+    
+    EA --> RC
+    EB --> RC
+    EC --> RC
+    
+    EA --> ES
+    EB --> ES
+    EC --> ES
+```
+
+### Authentication Flow
+
+```mermaid
+sequenceDiagram
+    participant C as Client
+    participant E as elastauth
+    participant P as Auth Provider
+    participant R as Redis Cache
+    participant ES as Elasticsearch
+    
+    Note over C,ES: Authentication Request Flow
+    
+    C->>E: Request with Auth Info
+    E->>P: Validate & Extract User
+    P-->>E: User Information
+    
+    E->>R: Check Cached Credentials
+    alt Cache Hit
+        R-->>E: Encrypted Credentials
+        Note over E: Decrypt & Return
+    else Cache Miss
+        E->>ES: Create/Update User
+        ES-->>E: User Account Ready
+        E->>R: Cache Encrypted Credentials
+    end
+    
+    E-->>C: Authorization Header
+    
+    Note over C,ES: Elasticsearch Access
+    C->>ES: Request with Auth Header
+    ES-->>C: Data Response
 ```
 
 ## Supported Providers
@@ -65,6 +160,30 @@ elastauth supports a wide range of authentication providers:
 
 ## Next Steps
 
-- [Learn about elastauth concepts](./getting-started/concepts)
-- [Configure your first provider](./getting-started/configuration)
-- [Explore deployment options](./deployment/docker)
+### 📚 Learn the Fundamentals
+- **[Core Concepts](/getting-started/concepts)** - Understand elastauth's architecture and principles
+- **[Configuration Guide](/guides/configuration)** - Complete configuration reference
+- **[Security Model](/guides/security)** - Authentication and authorization concepts
+
+### 🔧 Configure Authentication
+- **[Authentication Providers](/providers/)** - Choose and configure your auth system
+  - [Authelia Provider](/providers/authelia) - Header-based authentication
+  - [OAuth2/OIDC Provider](/providers/oidc) - JWT token authentication
+- **[Cache Configuration](/cache/)** - Optimize performance with caching
+  - [Redis Cache](/cache/redis) - Distributed caching for scaling
+
+### 🚀 Deploy to Production
+- **[Docker Deployment](/deployment/docker)** - Container-based deployment
+- **[Kubernetes Deployment](/deployment/kubernetes)** - Production orchestration
+- **[Scaling Guide](/guides/scaling)** - Horizontal scaling considerations
+- **[Monitoring](/guides/monitoring)** - Health checks and observability
+
+### 🔍 Operations & Troubleshooting
+- **[Troubleshooting Guide](/guides/troubleshooting)** - Common issues and solutions
+- **[Upgrading](/guides/upgrading)** - Version upgrade procedures
+- **[Performance Tuning](/guides/performance)** - Optimization best practices
+
+### 🔗 Integration Examples
+- **[Elasticsearch Setup](/guides/elasticsearch)** - Configure Elasticsearch integration
+- **[Kibana Integration](/guides/kibana)** - Set up Kibana with elastauth
+- **[Load Balancer Configuration](/guides/load-balancer)** - Production load balancing

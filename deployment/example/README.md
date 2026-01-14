@@ -2,24 +2,78 @@
 
 A comprehensive, self-contained Docker Compose demo environment showcasing elastauth with Authelia authentication, Elasticsearch backend, and Redis caching.
 
+> 📚 **Full Documentation**: See [Starlight documentation](../../docs/) for comprehensive guides
+
 ## Overview
 
-This demo environment provides a complete authentication proxy setup that demonstrates:
+This demo environment demonstrates elastauth in **authentication-only mode** (default), where elastauth validates authentication and returns headers for use with reverse proxies like Traefik.
+
+**What's included:**
 
 - **Authelia**: File-based authentication server providing user authentication
-- **elastauth**: Authentication proxy that validates headers and proxies requests to Elasticsearch
+- **elastauth**: Authentication proxy that validates headers and manages Elasticsearch users
 - **Elasticsearch 9.2.4**: Secure backend with TLS enabled and X-Pack security (fully open source under AGPL)
 - **Redis**: Session storage and caching layer
 
-The environment is designed for local testing and demonstration purposes, with automated certificate generation, configuration management, and convenient Makefile targets for easy operation.
+## Operating Modes
+
+elastauth supports two operating modes. This demo uses **authentication-only mode** by default.
+
+### Authentication-Only Mode (Default)
+
+elastauth validates authentication and returns headers. A reverse proxy (like Traefik) handles proxying to Elasticsearch.
+
+```
+Client → Traefik → elastauth (auth) → Traefik → Elasticsearch
+```
+
+**When to use:**
+- You already use Traefik or another reverse proxy
+- You need advanced routing or middleware
+- You protect multiple services
+
+**Example:** See `deployment/example/traefik-auth-only/`
+
+### Transparent Proxy Mode
+
+elastauth handles both authentication and proxying directly to Elasticsearch.
+
+```
+Client → elastauth (auth + proxy) → Elasticsearch
+```
+
+**When to use:**
+- You don't need a reverse proxy
+- You want simpler architecture
+- You're deploying a single service
+
+**Example:** See `deployment/example/direct-proxy/`
+
+### Decision Guide
+
+**Choose Authentication-Only Mode if:**
+- ✅ You have existing Traefik infrastructure
+- ✅ You need to protect multiple services
+- ✅ You require advanced routing or middleware
+- ✅ You want centralized TLS termination
+
+**Choose Transparent Proxy Mode if:**
+- ✅ You're deploying elastauth standalone
+- ✅ You only need to protect Elasticsearch
+- ✅ You want the simplest possible setup
+- ✅ You prefer fewer components
+
+> 📚 **Detailed Comparison**: See [Operating Modes Documentation](../../docs/src/content/docs/deployment/modes.md)
 
 ## Architecture
+
+### Current Setup (Authentication-Only Mode)
 
 ```
 ┌──────────┐
 │  Client  │
 └────┬─────┘
-     │ 1. HTTP Request
+     │ 1. HTTP Request with Auth Headers
      ▼
 ┌─────────────────┐
 │   Authelia      │ :9091
@@ -40,16 +94,8 @@ The environment is designed for local testing and demonstration purposes, with a
 │   headers       │
 │ - Maps to ES    │
 │   user          │
-└────┬────────────┘
-     │ 3. Proxied Request + ES Auth
-     ▼
-┌─────────────────┐
-│ Elasticsearch   │ :9200
-│  (Backend)      │
-│                 │
-│ - Processes     │
-│   request       │
-│ - Returns data  │
+│ - Returns       │
+│   Authorization │
 └─────────────────┘
 
      ┌──────────┐
@@ -62,6 +108,30 @@ The environment is designed for local testing and demonstration purposes, with a
      ┌────┴────┐
      │         │
   Authelia  elastauth
+
+┌─────────────────┐
+│ Elasticsearch   │ :9200
+│  (Backend)      │
+│                 │
+│ - Direct access │
+│   for testing   │
+└─────────────────┘
+```
+
+### Alternative: With Traefik (Forward Auth)
+
+For production deployments with Traefik, see `deployment/example/traefik-auth-only/`:
+
+```
+Client → Traefik → elastauth (auth) → Traefik → Elasticsearch
+```
+
+### Alternative: Transparent Proxy Mode
+
+For direct proxy mode without Traefik, see `deployment/example/direct-proxy/`:
+
+```
+Client → elastauth (auth + proxy) → Elasticsearch
 ```
 
 ## Quick Start
@@ -168,18 +238,21 @@ make info
 
 ## Authentication Flow
 
-The demo environment demonstrates a complete authentication flow:
+The demo environment demonstrates authentication-only mode:
 
-1. **Client Request**: Client sends HTTP request to Authelia
+1. **Client Request**: Client sends HTTP request with authentication headers to elastauth
 2. **Authentication**: Authelia validates credentials and adds authentication headers:
    - `Remote-User`: Username
    - `Remote-Groups`: User groups
    - `Remote-Email`: User email
    - `Remote-Name`: User display name
-3. **Proxy**: Request is forwarded to elastauth with authentication headers
-4. **Validation**: elastauth validates headers and maps to Elasticsearch user
-5. **Backend**: Request is proxied to Elasticsearch with proper authentication
-6. **Response**: Elasticsearch processes request and returns data
+3. **Validation**: elastauth validates headers and maps to Elasticsearch user
+4. **User Management**: elastauth creates or updates Elasticsearch user with appropriate roles
+5. **Response**: elastauth returns success with user information
+
+**Note**: In this demo, elastauth does NOT proxy requests to Elasticsearch. For proxying, see:
+- **With Traefik**: `deployment/example/traefik-auth-only/` - Forward auth pattern
+- **Direct Proxy**: `deployment/example/direct-proxy/` - Transparent proxy mode
 
 ## Testing Examples
 
@@ -211,20 +284,18 @@ curl -H "Remote-User: admin" \
      http://localhost:3000/
 ```
 
-### Query Elasticsearch Through elastauth
+**Note**: This demo uses authentication-only mode. elastauth validates authentication but does not proxy to Elasticsearch. To test proxying:
+- **With Traefik**: See `deployment/example/traefik-auth-only/`
+- **Direct Proxy**: See `deployment/example/direct-proxy/`
+
+### Access Elasticsearch Directly
+
+In this demo, you can access Elasticsearch directly for testing:
 
 ```bash
-curl -H "Remote-User: admin" \
-     -H "Remote-Groups: admins" \
-     http://localhost:3000/_cluster/health
-```
-
-### Search Elasticsearch Indices
-
-```bash
-curl -H "Remote-User: admin" \
-     -H "Remote-Groups: admins" \
-     http://localhost:3000/_search
+# Direct access with elastic credentials
+curl -k -u elastic:demo-password-change-me \
+     https://localhost:9200/_cluster/health
 ```
 
 ## Troubleshooting
@@ -310,20 +381,26 @@ curl -H "Remote-User: admin" \
 
 ### Elasticsearch Proxy Routes Not Found (404)
 
-**Problem**: Requests to Elasticsearch endpoints through elastauth return 404 Not Found
+**Problem**: This demo uses authentication-only mode, not proxy mode
 
-**Symptoms**:
-- `curl -H "Remote-User: admin" http://localhost:3000/_cluster/health` returns `{"message":"Not Found"}`
-- elastauth logs show: `WARN Not Found ... request.path=/_cluster/health ... request.route=""`
-
-**Explanation**: The elastauth application uses a catch-all proxy route that forwards requests to Elasticsearch. The route should match all paths except specific elastauth endpoints like `/health`. If you're seeing 404 errors, it indicates the proxy route is not being registered or matched correctly.
+**Explanation**: The default demo configuration runs elastauth in authentication-only mode. In this mode, elastauth validates authentication and returns headers, but does NOT proxy requests to Elasticsearch.
 
 **Solutions**:
-1. Verify elastauth is running: `docker compose ps elastauth`
-2. Check elastauth logs for startup errors: `make logs SERVICE=elastauth`
-3. Ensure the root endpoint works first: `curl -H "Remote-User: admin" http://localhost:3000/`
-4. If root endpoint returns 500 error, fix TLS issues first (see above)
-5. Check that authentication headers are being sent with all requests
+
+1. **For Traefik Forward Auth**: See `deployment/example/traefik-auth-only/`
+   - Complete Traefik integration with forward auth middleware
+   - elastauth validates auth, Traefik proxies to Elasticsearch
+   - Documentation: `docs/src/content/docs/deployment/auth-only-mode.mdx`
+
+2. **For Direct Proxy Mode**: See `deployment/example/direct-proxy/`
+   - elastauth handles both auth and proxying
+   - Simpler architecture, fewer components
+   - Documentation: `docs/src/content/docs/deployment/proxy-mode.mdx`
+
+3. **Enable Proxy Mode in This Demo** (not recommended):
+   - Uncomment proxy environment variables in `docker-compose.yml`
+   - See comments in the elastauth service section
+   - Better to use the dedicated `direct-proxy` example instead
 
 ### Configuration Issues
 
@@ -647,9 +724,50 @@ logging:
 
 Restart services and view logs: `make restart && make logs-follow`
 
+## Deployment Scenarios
+
+This demo shows the basic authentication-only mode. For production deployments, see these examples:
+
+### 1. Traefik Forward Auth (Recommended for Production)
+
+**Location**: `deployment/example/traefik-auth-only/`
+
+**Architecture**: Client → Traefik → elastauth (auth) → Traefik → Elasticsearch
+
+**Use when:**
+- You already use Traefik
+- You need advanced routing/middleware
+- You protect multiple services
+- You want centralized TLS termination
+
+**Documentation**: `docs/src/content/docs/deployment/auth-only-mode.mdx`
+
+### 2. Direct Proxy Mode (Simpler Architecture)
+
+**Location**: `deployment/example/direct-proxy/`
+
+**Architecture**: Client → elastauth (auth + proxy) → Elasticsearch
+
+**Use when:**
+- You don't need a reverse proxy
+- You want simpler architecture
+- You're deploying a single service
+- You prefer fewer components
+
+**Documentation**: `docs/src/content/docs/deployment/proxy-mode.mdx`
+
+### 3. Mode Comparison
+
+**Location**: `docs/src/content/docs/deployment/modes.md`
+
+Complete comparison of both modes with decision tree and recommendations.
+
 ## Additional Resources
 
 - [elastauth Documentation](../../README.md)
+- [Operating Modes Comparison](../../docs/src/content/docs/deployment/modes.md)
+- [Traefik Integration Guide](../../docs/src/content/docs/deployment/auth-only-mode.mdx)
+- [Direct Proxy Mode Guide](../../docs/src/content/docs/deployment/proxy-mode.mdx)
 - [Authelia Documentation](https://www.authelia.com/)
 - [Elasticsearch Documentation](https://www.elastic.co/guide/en/elasticsearch/reference/current/index.html)
 - [Docker Compose Documentation](https://docs.docker.com/compose/)

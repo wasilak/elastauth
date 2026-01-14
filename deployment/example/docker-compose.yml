@@ -1,5 +1,20 @@
 version: "3.8"
 
+# elastauth Demo Environment
+#
+# This docker-compose file demonstrates elastauth in AUTHENTICATION-ONLY MODE (default).
+# In this mode, elastauth validates authentication and returns headers, but does not
+# proxy requests to Elasticsearch. This is the recommended mode when using Traefik
+# or another reverse proxy.
+#
+# For TRANSPARENT PROXY MODE (elastauth proxies requests directly), see:
+# - deployment/example/direct-proxy/ directory
+# - Documentation: docs/src/content/docs/deployment/proxy-mode.mdx
+#
+# For TRAEFIK INTEGRATION (forward auth), see:
+# - deployment/example/traefik-auth-only/ directory
+# - Documentation: docs/src/content/docs/deployment/auth-only-mode.mdx
+
 networks:
   elastauth-demo:
     driver: bridge
@@ -11,6 +26,37 @@ volumes:
     driver: local
 
 services:
+  # ============================================================================
+  # Traefik Reverse Proxy (Optional - for forward auth mode)
+  # ============================================================================
+  # Uncomment this service to enable Traefik forward authentication mode.
+  # This demonstrates elastauth working with Traefik as a forward auth middleware.
+  # See deployment/example/traefik-auth-only/ for a complete Traefik example.
+  #
+  # traefik:
+  #   image: traefik:v2.10
+  #   container_name: traefik-demo
+  #   command:
+  #     - "--api.insecure=true"
+  #     - "--providers.docker=true"
+  #     - "--providers.file.filename=/etc/traefik/dynamic-config.yml"
+  #     - "--entrypoints.web.address=:80"
+  #     - "--entrypoints.websecure.address=:443"
+  #   ports:
+  #     - "80:80"
+  #     - "443:443"
+  #     - "8080:8080"  # Traefik dashboard
+  #   volumes:
+  #     - /var/run/docker.sock:/var/run/docker.sock:ro
+  #     - ./configs/traefik:/etc/traefik:ro
+  #     - ./certs:/certs:ro
+  #   networks:
+  #     - elastauth-demo
+  #   restart: unless-stopped
+
+  # ============================================================================
+  # Core Services
+  # ============================================================================
   elasticsearch:
     image: docker.elastic.co/elasticsearch/elasticsearch:9.2.4
     container_name: elasticsearch-demo
@@ -89,6 +135,21 @@ services:
       retries: 3
     restart: unless-stopped
 
+  # ============================================================================
+  # elastauth - Authentication Proxy
+  # ============================================================================
+  # Currently configured in AUTHENTICATION-ONLY MODE (default).
+  # To enable TRANSPARENT PROXY MODE, uncomment the proxy environment variables below.
+  #
+  # Mode Comparison:
+  # - Auth-Only Mode: Returns auth headers, requires reverse proxy (Traefik)
+  # - Proxy Mode: Proxies requests directly to Elasticsearch
+  #
+  # Documentation:
+  # - Auth-Only: docs/src/content/docs/deployment/auth-only-mode.mdx
+  # - Proxy Mode: docs/src/content/docs/deployment/proxy-mode.mdx
+  # - Comparison: docs/src/content/docs/deployment/modes.md
+  
   elastauth:
     build:
       context: ../..
@@ -104,6 +165,26 @@ services:
     environment:
       - TZ=UTC
       - ELASTAUTH_CONFIG=/config
+      
+      # ========================================================================
+      # Transparent Proxy Mode Configuration (Optional)
+      # ========================================================================
+      # Uncomment these variables to enable transparent proxy mode.
+      # In this mode, elastauth proxies requests directly to Elasticsearch.
+      #
+      # - ELASTAUTH_PROXY_ENABLED=true
+      # - ELASTAUTH_PROXY_ELASTICSEARCH_URL=https://elasticsearch:9200
+      # - ELASTAUTH_PROXY_TIMEOUT=30s
+      # - ELASTAUTH_PROXY_MAX_IDLE_CONNS=100
+      # - ELASTAUTH_PROXY_IDLE_CONN_TIMEOUT=90s
+      # - ELASTAUTH_PROXY_TLS_ENABLED=true
+      # - ELASTAUTH_PROXY_TLS_CA_CERT=/certs/ca.crt
+      # - ELASTAUTH_PROXY_TLS_INSECURE_SKIP_VERIFY=true  # Dev only!
+      #
+      # Note: When proxy mode is enabled, clients send requests directly to
+      # elastauth (port 3000), and elastauth forwards them to Elasticsearch.
+      # See deployment/example/direct-proxy/ for a complete proxy mode example.
+      
     depends_on:
       redis:
         condition: service_healthy

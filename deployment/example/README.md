@@ -384,13 +384,51 @@ Restart services: `make restart`
 
 Edit `configs/elastauth/config.yml` to modify:
 
-- Server port and host
-- Authentication provider settings
-- Elasticsearch connection details
-- Cache configuration
-- Logging settings
+**Server Configuration:**
+```yaml
+listen: "0.0.0.0:3000"  # Server listen address
+```
 
-Restart elastauth: `docker compose restart elastauth`
+**Authentication Provider:**
+```yaml
+auth_provider: "authelia"  # Options: authelia, casdoor, oidc
+
+authelia:
+  user_header: "Remote-User"
+  groups_header: "Remote-Groups"
+  email_header: "Remote-Email"
+  name_header: "Remote-Name"
+```
+
+**Elasticsearch Configuration (Legacy Format):**
+```yaml
+elasticsearch_host: "https://elasticsearch:9200"
+elasticsearch_username: "elastic"
+elasticsearch_password: "demo-password-change-me"
+
+elasticsearch:
+  tls:
+    enabled: true
+    ca_cert: "/certs/ca.crt"
+    skip_verify: true  # Set to false with proper certificates
+```
+
+**Redis Cache Configuration:**
+```yaml
+cache:
+  type: "redis"
+  redis_host: "redis:6379"  # Note: redis_host not redis.address
+  redis_db: 0
+```
+
+**Logging Configuration:**
+```yaml
+logging:
+  level: "info"  # Options: debug, info, warn, error
+  format: "json"  # Options: json, text
+```
+
+After making changes, restart elastauth: `docker compose restart elastauth`
 
 ## Directory Structure
 

@@ -104,7 +104,7 @@ This implementation plan transforms elastauth into a dual-mode authentication pr
   - **Property 10: Auth-Only Mode Path Handling**
   - **Validates: Requirements 4.4, 4.5**
 
-- [ ] 7. Integrate router into webserver
+- [x] 7. Integrate router into webserver
   - Update `WebserverInit` in `libs/webserver.go`
   - Initialize router based on proxy configuration
   - Wire up auth-only handler and goproxy server
@@ -119,7 +119,7 @@ This implementation plan transforms elastauth into a dual-mode authentication pr
   - **Property 3: Authentication and Proxying in Proxy Mode**
   - **Validates: Requirements 1.4, 2.1, 2.2**
 
-- [ ] 8. Update health checks for proxy mode
+- [x] 8. Update health checks for proxy mode
   - Update `ReadinessRoute` to check Elasticsearch in proxy mode
   - Update `checkElasticsearchReadiness` to respect proxy mode
   - Add proxy mode information to health check responses
@@ -134,7 +134,7 @@ This implementation plan transforms elastauth into a dual-mode authentication pr
   - **Property 21: Health Check Mode Information**
   - **Validates: Requirements 10.5**
 
-- [ ] 9. Implement log sanitization
+- [x] 9. Implement log sanitization
   - Update `SanitizeForLogging` in `libs/utils.go`
   - Add sanitization for proxy-specific fields
   - Ensure credentials never appear in logs

@@ -6,11 +6,14 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"fmt"
+	"log/slog"
+	"net/http"
 	"net/url"
 	"os"
 	"reflect"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/sethvargo/go-password/password"
 	"github.com/spf13/viper"
@@ -233,7 +236,28 @@ func EncodeForCacheKey(username string) string {
 // It looks for common sensitive keywords like "password", "secret", "key", "token", "credential", and "auth".
 func IsSensitiveField(fieldName string) bool {
 	lowerName := strings.ToLower(fieldName)
-	sensitiveKeywords := []string{"password", "secret", "key", "token", "credential", "auth"}
+	sensitiveKeywords := []string{
+		"password",
+		"secret",
+		"key",
+		"token",
+		"credential",
+		"auth",
+		"authorization", // HTTP Authorization header
+		"bearer",        // Bearer tokens
+		"basic",         // Basic auth
+		"cookie",        // Session cookies
+		"session",       // Session IDs
+		"api_key",       // API keys
+		"apikey",        // API keys (no underscore)
+		"private",       // Private keys
+		"cert",          // Certificates
+		"x-auth",        // Custom auth headers
+		"remote-user",   // Authelia header (contains username, but treated as sensitive)
+		"remote-email",  // Authelia header
+		"remote-name",   // Authelia header
+		"remote-groups", // Authelia header
+	}
 	for _, keyword := range sensitiveKeywords {
 		if strings.Contains(lowerName, keyword) {
 			return true
@@ -288,9 +312,124 @@ func SanitizeForLogging(data interface{}) interface{} {
 		}
 		return result
 
+	case reflect.String:
+		// Check if the string value itself looks like a credential
+		// This catches cases where the field name isn't sensitive but the value is
+		str := v.String()
+		if looksLikeCredential(str) {
+			return "***REDACTED***"
+		}
+		return str
+
 	default:
 		return data
 	}
+}
+
+// looksLikeCredential checks if a string value appears to be a credential
+// This provides defense-in-depth by catching credentials even when field names aren't sensitive
+func looksLikeCredential(s string) bool {
+	// Don't redact empty strings or very short strings
+	if len(s) < 8 {
+		return false
+	}
+
+	// Check for common credential patterns
+	lowerStr := strings.ToLower(s)
+	
+	// Bearer tokens
+	if strings.HasPrefix(lowerStr, "bearer ") {
+		return true
+	}
+	
+	// Basic auth (Base64 encoded username:password)
+	if strings.HasPrefix(lowerStr, "basic ") {
+		return true
+	}
+	
+	// JWT tokens (three base64 segments separated by dots)
+	if strings.Count(s, ".") == 2 && len(s) > 50 {
+		parts := strings.Split(s, ".")
+		if len(parts) == 3 && len(parts[0]) > 10 && len(parts[1]) > 10 && len(parts[2]) > 10 {
+			return true
+		}
+	}
+	
+	// API keys (long alphanumeric strings)
+	// This is a heuristic: if it's a long string with high entropy, it might be a key
+	if len(s) > 32 && isHighEntropyString(s) {
+		return true
+	}
+	
+	return false
+}
+
+// isHighEntropyString checks if a string has high entropy (likely a random key/token)
+func isHighEntropyString(s string) bool {
+	// Count unique characters
+	charSet := make(map[rune]bool)
+	for _, c := range s {
+		charSet[c] = true
+	}
+	
+	// High entropy strings have many unique characters relative to their length
+	uniqueRatio := float64(len(charSet)) / float64(len(s))
+	
+	// If more than 50% of characters are unique, it's likely high entropy
+	return uniqueRatio > 0.5
+}
+
+// Request ID context key type for type-safe context values
+type contextKey string
+
+const requestIDKey contextKey = "request_id"
+
+// GetRequestID extracts the request ID from the context
+// Returns an empty string if no request ID is found
+func GetRequestID(ctx context.Context) string {
+	if reqID, ok := ctx.Value(requestIDKey).(string); ok {
+		return reqID
+	}
+	return ""
+}
+
+// SetRequestID adds a request ID to the context
+// If the request already has an X-Request-ID header, use that
+// Otherwise, generate a new UUID
+func SetRequestID(ctx context.Context, r *http.Request) context.Context {
+	// Check if request already has a request ID header
+	reqID := r.Header.Get("X-Request-ID")
+	if reqID == "" {
+		// Generate a new UUID for the request
+		reqID = generateRequestID()
+	}
+	return context.WithValue(ctx, requestIDKey, reqID)
+}
+
+// generateRequestID generates a simple request ID
+// Uses a timestamp and random component for uniqueness
+func generateRequestID() string {
+	// Use crypto/rand for better randomness
+	b := make([]byte, 16)
+	if _, err := rand.Read(b); err != nil {
+		// Fallback to timestamp-based ID if random generation fails
+		return fmt.Sprintf("req-%d", time.Now().UnixNano())
+	}
+	return fmt.Sprintf("req-%x", b)
+}
+
+// AddRequestIDToLogs returns a new context with the request ID added to slog attributes
+// This ensures all logs from this context include the request ID
+func AddRequestIDToLogs(ctx context.Context) context.Context {
+	reqID := GetRequestID(ctx)
+	if reqID == "" {
+		return ctx
+	}
+	
+	// Add request ID as a slog attribute to the context
+	// This will be included in all logs made with this context
+	logger := slog.Default().With(slog.String("request_id", reqID))
+	return context.WithValue(ctx, slog.Default(), logger)
 }
 
 // SafeLogError returns a generic error message that does not expose implementation details.

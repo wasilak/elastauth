@@ -161,8 +161,14 @@ elastauth supports two deployment modes to fit different architectures:
 
 Works with reverse proxies like Traefik using forward authentication:
 
-```
-Client → Traefik → elastauth (auth) → Traefik → Elasticsearch
+```mermaid
+graph LR
+    Client[Client] --> Traefik1[Traefik]
+    Traefik1 --> elastauth[elastauth<br/>auth]
+    elastauth --> Traefik2[Traefik]
+    Traefik2 --> ES[Elasticsearch]
+    
+    style elastauth fill:#e1f5e1
 ```
 
 **Best for:**
@@ -176,8 +182,12 @@ Client → Traefik → elastauth (auth) → Traefik → Elasticsearch
 
 Acts as a complete authentication proxy:
 
-```
-Client → elastauth (auth + proxy) → Elasticsearch
+```mermaid
+graph LR
+    Client[Client] --> elastauth[elastauth<br/>auth + proxy]
+    elastauth --> ES[Elasticsearch]
+    
+    style elastauth fill:#e1f5e1
 ```
 
 **Best for:**

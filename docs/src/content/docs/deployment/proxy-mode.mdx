@@ -1,0 +1,791 @@
+---
+title: Transparent Proxy Mode
+description: Deploy elastauth as a direct authentication proxy
+---
+
+import { Tabs, TabItem } from '@astrojs/starlight/components';
+import { Steps } from '@astrojs/starlight/components';
+import { Card, CardGrid } from '@astrojs/starlight/components';
+import { Badge } from '@astrojs/starlight/components';
+import { LinkCard } from '@astrojs/starlight/components';
+
+<Badge text="Proxy Mode" variant="note" />
+
+Transparent proxy mode allows elastauth to act as a complete HTTP proxy, handling both authentication and request forwarding to Elasticsearch in a single service.
+
+## Overview
+
+In this mode, elastauth authenticates requests and proxies them directly to Elasticsearch, eliminating the need for a separate reverse proxy.
+
+### Architecture
+
+```mermaid
+graph LR
+    Client[Client] --> elastauth[elastauth<br/>Auth + Proxy]
+    elastauth --> ES[Elasticsearch]
+    
+    style elastauth fill:#e1f5e1
+```
+
+### Request Flow
+
+<Steps>
+
+1. Client sends request to elastauth
+2. elastauth validates authentication headers/tokens
+3. elastauth creates or updates Elasticsearch user with appropriate roles
+4. elastauth injects `Authorization` header with generated credentials
+5. elastauth proxies request to Elasticsearch
+6. Elasticsearch processes request and returns response
+7. elastauth forwards response to client
+
+</Steps>
+
+## When to Use
+
+<CardGrid>
+  <Card title="✅ Simpler Architecture" icon="rocket">
+    You don't need a reverse proxy
+  </Card>
+  <Card title="✅ Fewer Components" icon="list-format">
+    You want minimal infrastructure
+  </Card>
+  <Card title="✅ Single Service" icon="document">
+    You're deploying Elasticsearch only
+  </Card>
+  <Card title="✅ Direct Control" icon="setting">
+    You want full control over proxy behavior
+  </Card>
+</CardGrid>
+
+## Configuration
+
+### Basic Configuration
+
+<Tabs syncKey="config-format">
+  <TabItem label="YAML">
+    ```yaml
+    # Enable proxy mode
+    proxy:
+      enabled: true
+      elasticsearch_url: "https://elasticsearch:9200"
+      timeout: "30s"
+      max_idle_conns: 100
+      idle_conn_timeout: "90s"
+
+    # Authentication provider
+    auth_provider: "authelia"
+
+    # Elasticsearch connection (for user management)
+    elasticsearch:
+      hosts: ["https://elasticsearch:9200"]
+      username: "elastic"
+      password: "changeme"
+
+    # Security
+    secret_key: "your-64-char-hex-key"
+    default_roles: ["kibana_user"]
+
+    # Cache for performance
+    cache:
+      type: "redis"
+      redis_host: "redis:6379"
+      expiration: "1h"
+
+    # Server settings
+    listen: "0.0.0.0:5000"
+    log_level: "info"
+    ```
+  </TabItem>
+  <TabItem label="Environment Variables">
+    ```bash
+    # Proxy mode
+    ELASTAUTH_PROXY_ENABLED=true
+    ELASTAUTH_PROXY_ELASTICSEARCH_URL=https://elasticsearch:9200
+    ELASTAUTH_PROXY_TIMEOUT=30s
+    ELASTAUTH_PROXY_MAX_IDLE_CONNS=100
+    ELASTAUTH_PROXY_IDLE_CONN_TIMEOUT=90s
+
+    # Authentication
+    ELASTAUTH_AUTH_PROVIDER=authelia
+    ELASTAUTH_SECRET_KEY=your-64-char-hex-key
+
+    # Elasticsearch
+    ELASTAUTH_ELASTICSEARCH_USERNAME=elastic
+    ELASTAUTH_ELASTICSEARCH_PASSWORD=changeme
+
+    # Cache
+    ELASTAUTH_CACHE_TYPE=redis
+    ELASTAUTH_CACHE_REDIS_HOST=redis:6379
+    ELASTAUTH_CACHE_EXPIRATION=1h
+    ```
+  </TabItem>
+</Tabs>
+
+## TLS Configuration
+
+### Elasticsearch TLS
+
+Configure TLS for secure connections to Elasticsearch:
+
+```yaml
+proxy:
+  enabled: true
+  elasticsearch_url: "https://elasticsearch:9200"
+  
+  tls:
+    enabled: true
+    insecure_skip_verify: false  # Never use true in production
+    ca_cert: "/certs/ca.crt"
+    client_cert: "/certs/client.crt"
+    client_key: "/certs/client.key"
+```
+
+:::danger[Production TLS]
+Never use `insecure_skip_verify: true` in production. This disables certificate validation and is only for development/testing.
+:::
+
+### Certificate Setup
+
+<Tabs syncKey="cert-type">
+  <TabItem label="Development (Self-Signed)">
+    <Steps>
+
+    1. Create certificates directory:
+       ```bash
+       mkdir -p certs
+       ```
+
+    2. Generate CA key and certificate:
+       ```bash
+       openssl req -x509 -newkey rsa:4096 -keyout certs/ca.key \
+         -out certs/ca.crt -days 365 -nodes \
+         -subj "/CN=Elasticsearch CA"
+       ```
+
+    3. Generate server key and CSR:
+       ```bash
+       openssl req -newkey rsa:4096 -keyout certs/server.key \
+         -out certs/server.csr -nodes \
+         -subj "/CN=elasticsearch"
+       ```
+
+    4. Sign server certificate with CA:
+       ```bash
+       openssl x509 -req -in certs/server.csr -CA certs/ca.crt \
+         -CAkey certs/ca.key -CAcreateserial \
+         -out certs/server.crt -days 365
+       ```
+
+    5. Generate client key and CSR:
+       ```bash
+       openssl req -newkey rsa:4096 -keyout certs/client.key \
+         -out certs/client.csr -nodes \
+         -subj "/CN=elastauth"
+       ```
+
+    6. Sign client certificate with CA:
+       ```bash
+       openssl x509 -req -in certs/client.csr -CA certs/ca.crt \
+         -CAkey certs/ca.key -CAcreateserial \
+         -out certs/client.crt -days 365
+       ```
+
+    </Steps>
+  </TabItem>
+  <TabItem label="Production">
+    Use certificates from your organization's PKI or Let's Encrypt:
+
+    ```yaml
+    proxy:
+      tls:
+        enabled: true
+        ca_cert: "/etc/ssl/certs/company-ca.crt"
+        client_cert: "/etc/ssl/certs/elastauth.crt"
+        client_key: "/etc/ssl/private/elastauth.key"
+    ```
+  </TabItem>
+</Tabs>
+
+## Docker Compose Example
+
+<Tabs syncKey="docker-setup">
+  <TabItem label="Basic Setup">
+    ```yaml
+    version: '3.8'
+
+    services:
+      authelia:
+        image: authelia/authelia:latest
+        volumes:
+          - ./authelia:/config
+        environment:
+          - TZ=UTC
+        ports:
+          - "9091:9091"
+        networks:
+          - elastauth-net
+
+      elastauth:
+        image: ghcr.io/wasilak/elastauth:latest
+        ports:
+          - "5000:5000"
+        environment:
+          # Proxy mode
+          - ELASTAUTH_PROXY_ENABLED=true
+          - ELASTAUTH_PROXY_ELASTICSEARCH_URL=https://elasticsearch:9200
+          - ELASTAUTH_PROXY_TIMEOUT=30s
+          
+          # Authentication
+          - ELASTAUTH_AUTH_PROVIDER=authelia
+          - ELASTAUTH_SECRET_KEY=${ELASTAUTH_SECRET_KEY}
+          
+          # Elasticsearch
+          - ELASTAUTH_ELASTICSEARCH_USERNAME=elastic
+          - ELASTAUTH_ELASTICSEARCH_PASSWORD=${ELASTICSEARCH_PASSWORD}
+          
+          # Cache
+          - ELASTAUTH_CACHE_TYPE=redis
+          - ELASTAUTH_CACHE_REDIS_HOST=redis:6379
+        volumes:
+          - ./config.yml:/app/config.yml:ro
+        networks:
+          - elastauth-net
+        depends_on:
+          - redis
+          - elasticsearch
+          - authelia
+
+      redis:
+        image: redis:7-alpine
+        networks:
+          - elastauth-net
+
+      elasticsearch:
+        image: docker.elastic.co/elasticsearch/elasticsearch:8.11.0
+        environment:
+          - discovery.type=single-node
+          - xpack.security.enabled=true
+          - ELASTIC_PASSWORD=${ELASTICSEARCH_PASSWORD}
+        networks:
+          - elastauth-net
+        volumes:
+          - es-data:/usr/share/elasticsearch/data
+
+    networks:
+      elastauth-net:
+        driver: bridge
+
+    volumes:
+      es-data:
+    ```
+  </TabItem>
+  <TabItem label="With TLS">
+    ```yaml
+    version: '3.8'
+
+    services:
+      authelia:
+        image: authelia/authelia:latest
+        volumes:
+          - ./authelia:/config
+        environment:
+          - TZ=UTC
+        ports:
+          - "9091:9091"
+        networks:
+          - elastauth-net
+
+      elastauth:
+        image: ghcr.io/wasilak/elastauth:latest
+        ports:
+          - "5000:5000"
+        environment:
+          # Proxy mode with TLS
+          - ELASTAUTH_PROXY_ENABLED=true
+          - ELASTAUTH_PROXY_ELASTICSEARCH_URL=https://elasticsearch:9200
+          - ELASTAUTH_PROXY_TIMEOUT=30s
+          - ELASTAUTH_PROXY_TLS_ENABLED=true
+          - ELASTAUTH_PROXY_TLS_CA_CERT=/certs/ca.crt
+          - ELASTAUTH_PROXY_TLS_CLIENT_CERT=/certs/client.crt
+          - ELASTAUTH_PROXY_TLS_CLIENT_KEY=/certs/client.key
+          
+          # Authentication
+          - ELASTAUTH_AUTH_PROVIDER=authelia
+          - ELASTAUTH_SECRET_KEY=${ELASTAUTH_SECRET_KEY}
+          
+          # Elasticsearch
+          - ELASTAUTH_ELASTICSEARCH_USERNAME=elastic
+          - ELASTAUTH_ELASTICSEARCH_PASSWORD=${ELASTICSEARCH_PASSWORD}
+          
+          # Cache
+          - ELASTAUTH_CACHE_TYPE=redis
+          - ELASTAUTH_CACHE_REDIS_HOST=redis:6379
+        volumes:
+          - ./config.yml:/app/config.yml:ro
+          - ./certs:/certs:ro
+        networks:
+          - elastauth-net
+        depends_on:
+          - redis
+          - elasticsearch
+          - authelia
+
+      redis:
+        image: redis:7-alpine
+        networks:
+          - elastauth-net
+
+      elasticsearch:
+        image: docker.elastic.co/elasticsearch/elasticsearch:8.11.0
+        environment:
+          - discovery.type=single-node
+          - xpack.security.enabled=true
+          - xpack.security.http.ssl.enabled=true
+          - xpack.security.http.ssl.key=/usr/share/elasticsearch/config/certs/server.key
+          - xpack.security.http.ssl.certificate=/usr/share/elasticsearch/config/certs/server.crt
+          - xpack.security.http.ssl.certificate_authorities=/usr/share/elasticsearch/config/certs/ca.crt
+          - ELASTIC_PASSWORD=${ELASTICSEARCH_PASSWORD}
+        volumes:
+          - es-data:/usr/share/elasticsearch/data
+          - ./certs:/usr/share/elasticsearch/config/certs:ro
+        networks:
+          - elastauth-net
+
+    networks:
+      elastauth-net:
+        driver: bridge
+
+    volumes:
+      es-data:
+    ```
+  </TabItem>
+</Tabs>
+
+## Testing
+
+### Test Proxy Endpoint
+
+<Tabs syncKey="test-provider">
+  <TabItem label="With Authelia">
+    ```bash
+    # Test with Authelia headers
+    curl -H "Remote-User: testuser" \
+         -H "Remote-Groups: admins,users" \
+         -H "Remote-Email: test@example.com" \
+         http://localhost:5000/_cluster/health
+
+    # Should return Elasticsearch cluster health
+    {
+      "cluster_name": "docker-cluster",
+      "status": "green",
+      "timed_out": false,
+      ...
+    }
+    ```
+  </TabItem>
+  <TabItem label="With OIDC">
+    ```bash
+    # Get JWT token from your OIDC provider
+    TOKEN="your-jwt-token"
+
+    # Access Elasticsearch through elastauth
+    curl -H "Authorization: Bearer $TOKEN" \
+         http://localhost:5000/_cluster/health
+    ```
+  </TabItem>
+  <TabItem label="Different Endpoints">
+    ```bash
+    # Cluster health
+    curl -H "Remote-User: testuser" \
+         http://localhost:5000/_cluster/health
+
+    # Index operations
+    curl -H "Remote-User: testuser" \
+         http://localhost:5000/_cat/indices
+
+    # Search
+    curl -H "Remote-User: testuser" \
+         -X POST http://localhost:5000/my-index/_search \
+         -H "Content-Type: application/json" \
+         -d '{"query": {"match_all": {}}}'
+
+    # Document operations
+    curl -H "Remote-User: testuser" \
+         -X PUT http://localhost:5000/my-index/_doc/1 \
+         -H "Content-Type: application/json" \
+         -d '{"field": "value"}'
+    ```
+  </TabItem>
+</Tabs>
+
+### Verify Credential Caching
+
+```bash
+# First request (generates credentials)
+time curl -H "Remote-User: testuser" \
+          http://localhost:5000/_cluster/health
+
+# Second request (uses cached credentials - should be faster)
+time curl -H "Remote-User: testuser" \
+          http://localhost:5000/_cluster/health
+```
+
+## Performance Tuning
+
+### Connection Pool Configuration
+
+Optimize connection pooling for your workload:
+
+<Tabs syncKey="workload">
+  <TabItem label="Low Traffic (< 10 req/s)">
+    ```yaml
+    proxy:
+      max_idle_conns: 10
+      idle_conn_timeout: "30s"
+      timeout: "30s"
+    ```
+  </TabItem>
+  <TabItem label="Medium Traffic (10-100 req/s)">
+    ```yaml
+    proxy:
+      max_idle_conns: 100
+      idle_conn_timeout: "90s"
+      timeout: "30s"
+    ```
+  </TabItem>
+  <TabItem label="High Traffic (> 100 req/s)">
+    ```yaml
+    proxy:
+      max_idle_conns: 200
+      idle_conn_timeout: "120s"
+      timeout: "60s"
+    ```
+  </TabItem>
+</Tabs>
+
+### Cache Optimization
+
+<CardGrid>
+  <Card title="High Security" icon="warning">
+    ```yaml
+    cache:
+      expiration: "15m"
+    ```
+    More frequent credential rotation
+  </Card>
+  <Card title="Balanced" icon="approve-check">
+    ```yaml
+    cache:
+      expiration: "1h"
+    ```
+    Default, good for most use cases
+  </Card>
+  <Card title="Performance" icon="rocket">
+    ```yaml
+    cache:
+      expiration: "4h"
+    ```
+    Fewer Elasticsearch operations
+  </Card>
+</CardGrid>
+
+### Horizontal Scaling
+
+Scale elastauth instances with shared Redis cache:
+
+<Steps>
+
+1. Configure multiple replicas:
+   ```yaml
+   services:
+     elastauth:
+       image: ghcr.io/wasilak/elastauth:latest
+       deploy:
+         replicas: 3  # Multiple instances
+       environment:
+         - ELASTAUTH_PROXY_ENABLED=true
+         - ELASTAUTH_CACHE_TYPE=redis
+         - ELASTAUTH_CACHE_REDIS_HOST=redis:6379
+   ```
+
+2. Add load balancer (nginx):
+   ```yaml
+   services:
+     nginx:
+       image: nginx:alpine
+       ports:
+         - "80:80"
+       volumes:
+         - ./nginx.conf:/etc/nginx/nginx.conf:ro
+       depends_on:
+         - elastauth
+       networks:
+         - elastauth-net
+   ```
+
+3. Configure nginx:
+   ```nginx
+   upstream elastauth {
+       least_conn;
+       server elastauth-1:5000;
+       server elastauth-2:5000;
+       server elastauth-3:5000;
+   }
+
+   server {
+       listen 80;
+       
+       location / {
+           proxy_pass http://elastauth;
+           proxy_set_header Host $host;
+           proxy_set_header X-Real-IP $remote_addr;
+           proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+       }
+   }
+   ```
+
+</Steps>
+
+### Monitoring
+
+Enable metrics for performance monitoring:
+
+```yaml
+enable_metrics: true
+```
+
+Access metrics:
+```bash
+curl http://localhost:5000/metrics
+```
+
+**Key metrics to monitor:**
+- `elastauth_proxy_requests_total` - Total proxy requests
+- `elastauth_proxy_request_duration_seconds` - Request latency
+- `elastauth_proxy_errors_total` - Proxy errors
+- `elastauth_cache_hits_total` - Cache hit rate
+- `elastauth_cache_misses_total` - Cache miss rate
+
+## Troubleshooting
+
+### Issue: 502 Bad Gateway
+
+:::danger[Connection Error]
+elastauth returns 502, logs show "connection refused" or "no such host"
+:::
+
+**Solutions:**
+
+<Steps>
+
+1. Verify Elasticsearch URL:
+   ```yaml
+   proxy:
+     elasticsearch_url: "https://elasticsearch:9200"  # Check hostname and port
+   ```
+
+2. Test connectivity:
+   ```bash
+   docker exec elastauth curl https://elasticsearch:9200
+   ```
+
+3. Check Elasticsearch is running:
+   ```bash
+   docker ps | grep elasticsearch
+   docker logs elasticsearch
+   ```
+
+4. Verify network connectivity:
+   ```bash
+   docker exec elastauth ping elasticsearch
+   ```
+
+</Steps>
+
+### Issue: TLS Certificate Errors
+
+:::caution[Certificate Validation Failed]
+"x509: certificate signed by unknown authority" or "tls: bad certificate"
+:::
+
+**Solutions:**
+
+<Steps>
+
+1. Verify CA certificate path:
+   ```yaml
+   proxy:
+     tls:
+       ca_cert: "/certs/ca.crt"  # Must exist in container
+   ```
+
+2. Check certificate is mounted:
+   ```yaml
+   volumes:
+     - ./certs:/certs:ro  # Ensure certificates are mounted
+   ```
+
+3. Verify certificate contents:
+   ```bash
+   docker exec elastauth cat /certs/ca.crt
+   ```
+
+4. For development only, disable verification:
+   ```yaml
+   proxy:
+     tls:
+       insecure_skip_verify: true  # NEVER use in production
+   ```
+
+</Steps>
+
+### Issue: Slow Response Times
+
+:::caution[Performance Issues]
+High latency, timeouts, poor performance
+:::
+
+**Solutions:**
+
+<Steps>
+
+1. Increase connection pool:
+   ```yaml
+   proxy:
+     max_idle_conns: 200
+     idle_conn_timeout: "120s"
+   ```
+
+2. Increase timeout:
+   ```yaml
+   proxy:
+     timeout: "60s"
+   ```
+
+3. Check cache hit rate:
+   ```bash
+   curl http://localhost:5000/metrics | grep cache
+   ```
+
+4. Optimize cache expiration:
+   ```yaml
+   cache:
+     expiration: "2h"  # Longer expiration = fewer ES operations
+   ```
+
+</Steps>
+
+### Issue: Authentication Failures
+
+:::danger[Authentication Error]
+401 Unauthorized, "missing authentication headers"
+:::
+
+**Solutions:**
+
+<Tabs syncKey="auth-provider">
+  <TabItem label="Authelia">
+    ```bash
+    # Verify authentication headers
+    curl -H "Remote-User: testuser" \
+         -H "Remote-Groups: admins" \
+         http://localhost:5000/_cluster/health
+    ```
+  </TabItem>
+  <TabItem label="OIDC">
+    ```bash
+    # Verify JWT token
+    curl -H "Authorization: Bearer $TOKEN" \
+         http://localhost:5000/_cluster/health
+    ```
+  </TabItem>
+  <TabItem label="Check Logs">
+    ```bash
+    # Review elastauth logs
+    docker logs elastauth | grep -i auth
+    ```
+  </TabItem>
+</Tabs>
+
+## Security Considerations
+
+:::danger[Secret Key Security]
+The secret key must be:
+- Exactly 64 hexadecimal characters (32 bytes)
+- Kept secret and secure
+- Same across all instances when using Redis cache
+:::
+
+### Generate Secure Key
+
+<Tabs syncKey="key-gen">
+  <TabItem label="Using elastauth">
+    ```bash
+    elastauth --generateKey
+    ```
+  </TabItem>
+  <TabItem label="Using OpenSSL">
+    ```bash
+    openssl rand -hex 32
+    ```
+  </TabItem>
+</Tabs>
+
+### Store Securely
+
+```bash
+# Generate and store
+export ELASTAUTH_SECRET_KEY=$(openssl rand -hex 32)
+
+# Use in docker-compose
+environment:
+  - ELASTAUTH_SECRET_KEY=${ELASTAUTH_SECRET_KEY}
+```
+
+### TLS Best Practices
+
+:::tip[Production TLS]
+Always use TLS in production with valid certificates from a trusted CA
+:::
+
+<Steps>
+
+1. Enable TLS:
+   ```yaml
+   proxy:
+     tls:
+       enabled: true
+       insecure_skip_verify: false
+   ```
+
+2. Use valid certificates (production)
+
+3. Rotate certificates regularly
+
+</Steps>
+
+## Next Steps
+
+<CardGrid>
+  <LinkCard
+    title="Configuration Reference"
+    description="Complete configuration options"
+    href="/elastauth/configuration/"
+  />
+  <LinkCard
+    title="OIDC Provider"
+    description="Use OIDC authentication"
+    href="/elastauth/providers/oidc/"
+  />
+  <LinkCard
+    title="Redis Cache"
+    description="Optimize Redis cache"
+    href="/elastauth/cache/redis/"
+  />
+  <LinkCard
+    title="Auth-Only Mode"
+    description="Compare with auth-only mode"
+    href="/elastauth/deployment/auth-only-mode/"
+  />
+</CardGrid>

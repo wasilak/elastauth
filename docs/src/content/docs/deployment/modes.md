@@ -24,14 +24,18 @@ In authentication-only mode (default), elastauth validates authentication and re
 
 ### Architecture
 
-```
-┌─────────┐    ┌─────────┐    ┌───────────┐    ┌─────────┐    ┌──────────────┐
-│ Client  │───►│ Traefik │───►│ elastauth │───►│ Traefik │───►│Elasticsearch │
-└─────────┘    │ (Proxy) │    │  (Auth)   │    │ (Proxy) │    └──────────────┘
-               └─────────┘    └───────────┘    └─────────┘
-                    │              │                 │
-                    └──────────────┴─────────────────┘
-                         Forward Auth Flow
+```mermaid
+graph LR
+    Client[Client] --> Traefik1[Traefik<br/>Proxy]
+    Traefik1 --> elastauth[elastauth<br/>Auth]
+    elastauth --> Traefik2[Traefik<br/>Proxy]
+    Traefik2 --> ES[Elasticsearch]
+    
+    Traefik1 -.Forward Auth.-> elastauth
+    
+    style elastauth fill:#e1f5e1
+    style Traefik1 fill:#e3f2fd
+    style Traefik2 fill:#e3f2fd
 ```
 
 ### Configuration
@@ -97,11 +101,12 @@ In transparent proxy mode, elastauth handles both authentication and proxying. I
 
 ### Architecture
 
-```
-┌─────────┐    ┌─────────────────────┐    ┌──────────────┐
-│ Client  │───►│     elastauth       │───►│Elasticsearch │
-└─────────┘    │ (Auth + Proxy)      │    └──────────────┘
-               └─────────────────────┘
+```mermaid
+graph LR
+    Client[Client] --> elastauth[elastauth<br/>Auth + Proxy]
+    elastauth --> ES[Elasticsearch]
+    
+    style elastauth fill:#e1f5e1
 ```
 
 ### Configuration

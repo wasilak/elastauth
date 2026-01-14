@@ -1,5 +1,11 @@
 package main
 
+// NOTE: This file contains legacy integration tests for Phase 1 (pluggable auth providers).
+// For comprehensive integration tests including proxy mode functionality, see:
+// - libs/integration_test.go - Auth-only mode integration tests
+// - libs/proxy_integration_test.go - Proxy mode integration tests
+// - provider/integration_test.go - Provider-specific integration tests
+
 import (
 	"context"
 	"net/http"

@@ -226,6 +226,206 @@ func ParseAndValidateGroups(groupsHeader string, enableWhitelist bool, whitelist
 	return validatedGroups, nil
 }
 
+// ValidateProxyRequest validates and sanitizes all user inputs in a proxy request
+// to prevent injection attacks. It validates HTTP method, headers, query parameters,
+// and path components.
+func ValidateProxyRequest(r *http.Request) error {
+	// Validate HTTP method - only allow standard HTTP methods
+	validMethods := map[string]bool{
+		"GET":     true,
+		"POST":    true,
+		"PUT":     true,
+		"DELETE":  true,
+		"HEAD":    true,
+		"OPTIONS": true,
+		"PATCH":   true,
+	}
+	
+	if !validMethods[r.Method] {
+		return fmt.Errorf("invalid HTTP method: %s", r.Method)
+	}
+	
+	// Validate path - prevent path traversal attacks
+	if err := validatePath(r.URL.Path); err != nil {
+		return fmt.Errorf("invalid path: %w", err)
+	}
+	
+	// Validate headers - prevent header injection
+	if err := validateHeaders(r.Header); err != nil {
+		return fmt.Errorf("invalid headers: %w", err)
+	}
+	
+	// Validate query parameters - prevent injection
+	if err := validateQueryParams(r.URL.Query()); err != nil {
+		return fmt.Errorf("invalid query parameters: %w", err)
+	}
+	
+	// Validate content length if present
+	if r.ContentLength < 0 {
+		return fmt.Errorf("invalid content length: %d", r.ContentLength)
+	}
+	
+	// Limit content length to prevent DoS (100MB max)
+	const maxContentLength = 100 * 1024 * 1024
+	if r.ContentLength > maxContentLength {
+		return fmt.Errorf("content length exceeds maximum allowed size of %d bytes", maxContentLength)
+	}
+	
+	return nil
+}
+
+// validatePath checks for path traversal attempts and invalid characters
+func validatePath(path string) error {
+	if path == "" {
+		return fmt.Errorf("path cannot be empty")
+	}
+	
+	// Check for path traversal attempts
+	if strings.Contains(path, "..") {
+		return fmt.Errorf("path traversal detected")
+	}
+	
+	// Check for null bytes (common injection technique)
+	if strings.Contains(path, "\x00") {
+		return fmt.Errorf("null byte detected in path")
+	}
+	
+	// Check for control characters (except tab and newline which are handled by HTTP parser)
+	for _, char := range path {
+		if char < 32 && char != '\t' && char != '\n' {
+			return fmt.Errorf("control character detected in path")
+		}
+	}
+	
+	// Path must start with /
+	if !strings.HasPrefix(path, "/") {
+		return fmt.Errorf("path must start with /")
+	}
+	
+	// Limit path length to prevent DoS
+	if len(path) > 8192 {
+		return fmt.Errorf("path exceeds maximum length of 8192 characters")
+	}
+	
+	return nil
+}
+
+// validateHeaders checks for header injection attempts
+func validateHeaders(headers http.Header) error {
+	for name, values := range headers {
+		// Validate header name
+		if err := validateHeaderName(name); err != nil {
+			return fmt.Errorf("invalid header name %q: %w", name, err)
+		}
+		
+		// Validate each header value
+		for _, value := range values {
+			if err := validateHeaderValue(value); err != nil {
+				return fmt.Errorf("invalid header value for %q: %w", name, err)
+			}
+		}
+	}
+	
+	return nil
+}
+
+// validateHeaderName validates HTTP header names
+func validateHeaderName(name string) error {
+	if name == "" {
+		return fmt.Errorf("header name cannot be empty")
+	}
+	
+	// Check for null bytes
+	if strings.Contains(name, "\x00") {
+		return fmt.Errorf("null byte detected")
+	}
+	
+	// Check for newlines (header injection)
+	if strings.ContainsAny(name, "\r\n") {
+		return fmt.Errorf("newline detected (header injection attempt)")
+	}
+	
+	// Limit header name length
+	if len(name) > 256 {
+		return fmt.Errorf("header name exceeds maximum length of 256 characters")
+	}
+	
+	return nil
+}
+
+// validateHeaderValue validates HTTP header values
+func validateHeaderValue(value string) error {
+	// Check for null bytes
+	if strings.Contains(value, "\x00") {
+		return fmt.Errorf("null byte detected")
+	}
+	
+	// Check for newlines (header injection)
+	if strings.ContainsAny(value, "\r\n") {
+		return fmt.Errorf("newline detected (header injection attempt)")
+	}
+	
+	// Limit header value length to prevent DoS
+	if len(value) > 8192 {
+		return fmt.Errorf("header value exceeds maximum length of 8192 characters")
+	}
+	
+	return nil
+}
+
+// validateQueryParams validates query parameters for injection attempts
+func validateQueryParams(params url.Values) error {
+	for name, values := range params {
+		// Validate parameter name
+		if err := validateQueryParamName(name); err != nil {
+			return fmt.Errorf("invalid query parameter name %q: %w", name, err)
+		}
+		
+		// Validate each parameter value
+		for _, value := range values {
+			if err := validateQueryParamValue(value); err != nil {
+				return fmt.Errorf("invalid query parameter value for %q: %w", name, err)
+			}
+		}
+	}
+	
+	return nil
+}
+
+// validateQueryParamName validates query parameter names
+func validateQueryParamName(name string) error {
+	if name == "" {
+		return fmt.Errorf("parameter name cannot be empty")
+	}
+	
+	// Check for null bytes
+	if strings.Contains(name, "\x00") {
+		return fmt.Errorf("null byte detected")
+	}
+	
+	// Limit parameter name length
+	if len(name) > 256 {
+		return fmt.Errorf("parameter name exceeds maximum length of 256 characters")
+	}
+	
+	return nil
+}
+
+// validateQueryParamValue validates query parameter values
+func validateQueryParamValue(value string) error {
+	// Check for null bytes
+	if strings.Contains(value, "\x00") {
+		return fmt.Errorf("null byte detected")
+	}
+	
+	// Limit parameter value length to prevent DoS
+	if len(value) > 8192 {
+		return fmt.Errorf("parameter value exceeds maximum length of 8192 characters")
+	}
+	
+	return nil
+}
+
 // EncodeForCacheKey encodes a username for safe use as a cache key.
 // It uses URL encoding to ensure special characters don't interfere with cache key format.
 func EncodeForCacheKey(username string) string {

@@ -208,6 +208,20 @@ func handleAuthentication(r *http.Request, ctx *goproxy.ProxyCtx, authProvider p
 //   - *http.Request: The modified request with credentials and rewritten URL
 //   - *http.Response: nil on success, or an error response (500) on failure
 func handleCredentialInjection(r *http.Request, ctx *goproxy.ProxyCtx, config *ProxyConfig, cacheManager cache.CacheInterface) (*http.Request, *http.Response) {
+	// Validate and sanitize proxy request to prevent injection attacks
+	if err := ValidateProxyRequest(r); err != nil {
+		slog.ErrorContext(r.Context(), "Request validation failed",
+			slog.String("error", err.Error()),
+			slog.String("method", r.Method),
+			slog.String("path", r.URL.Path),
+			slog.String("remote_addr", r.RemoteAddr),
+		)
+		return r, goproxy.NewResponse(r,
+			goproxy.ContentTypeText,
+			http.StatusBadRequest,
+			"Invalid request: "+err.Error())
+	}
+
 	// Retrieve user info from context (set by authentication handler)
 	userInfo, ok := ctx.UserData.(*provider.UserInfo)
 	if !ok || userInfo == nil {

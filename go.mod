@@ -29,6 +29,7 @@ require (
 	github.com/dgraph-io/badger/v4 v4.5.1 // indirect
 	github.com/dgraph-io/ristretto/v2 v2.1.0 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
+	github.com/elazarl/goproxy v1.7.2 // indirect
 	github.com/ghodss/yaml v1.0.0 // indirect
 	github.com/go-jose/go-jose/v4 v4.1.3 // indirect
 	github.com/go-openapi/jsonpointer v0.19.5 // indirect

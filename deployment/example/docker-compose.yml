@@ -12,13 +12,12 @@ volumes:
 
 services:
   elasticsearch:
-    image: docker.elastic.co/elasticsearch/elasticsearch:9.3.0
+    image: docker.elastic.co/elasticsearch/elasticsearch:9.1.0
     container_name: elasticsearch-demo
     environment:
       - node.name=es-demo-node
       - cluster.name=elastauth-demo
       - discovery.type=single-node
-      - node.roles=master,data
       - bootstrap.memory_lock=true
       - "ES_JAVA_OPTS=-Xms2g -Xmx2g"
       - xpack.security.enabled=true

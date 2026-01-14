@@ -8,7 +8,7 @@ This demo environment provides a complete authentication proxy setup that demons
 
 - **Authelia**: File-based authentication server providing user authentication
 - **elastauth**: Authentication proxy that validates headers and proxies requests to Elasticsearch
-- **Elasticsearch 9.x**: Secure backend with TLS enabled and X-Pack security
+- **Elasticsearch 9.1**: Secure backend with TLS enabled and X-Pack security (fully open source under AGPL)
 - **Redis**: Session storage and caching layer
 
 The environment is designed for local testing and demonstration purposes, with automated certificate generation, configuration management, and convenient Makefile targets for easy operation.

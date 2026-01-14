@@ -1,4 +1,4 @@
-.PHONY: help init up down restart logs logs-follow ps status test info clean clean-all
+.PHONY: help init init-force up down restart logs logs-follow ps status test info clean clean-all
 
 # Color output variables
 RED := \033[0;31m
@@ -6,6 +6,9 @@ GREEN := \033[0;32m
 YELLOW := \033[1;33m
 BLUE := \033[0;34m
 NC := \033[0m # No Color
+
+# Force flag for certificate regeneration
+FORCE ?= 0
 
 # Default target
 .DEFAULT_GOAL := help
@@ -16,6 +19,7 @@ help: ## Display this help message
 	@echo ""
 	@echo "$(GREEN)Initialization:$(NC)"
 	@echo "  make init          - Bootstrap the demo environment (generate certs and configs)"
+	@echo "  make init-force    - Force regenerate all certificates and configs"
 	@echo ""
 	@echo "$(GREEN)Service Management:$(NC)"
 	@echo "  make up            - Start all services in detached mode"
@@ -46,8 +50,13 @@ CERTS_DIR := certs
 # Generate CA certificate and private key
 generate-ca:
 	@echo "$(BLUE)Generating Certificate Authority...$(NC)"
+	@if [ "$(FORCE)" = "1" ]; then \
+		echo "$(YELLOW)Force flag set, regenerating CA certificate...$(NC)"; \
+		rm -f $(CERTS_DIR)/ca.crt $(CERTS_DIR)/ca.key $(CERTS_DIR)/ca.srl; \
+	fi
 	@if [ -f "$(CERTS_DIR)/ca.crt" ] && [ -f "$(CERTS_DIR)/ca.key" ]; then \
 		echo "$(YELLOW)CA certificate already exists, skipping generation$(NC)"; \
+		echo "$(YELLOW)Use 'make init-force' or 'make FORCE=1 init' to regenerate$(NC)"; \
 	else \
 		echo "$(GREEN)Creating CA private key (4096-bit RSA)...$(NC)"; \
 		openssl genrsa -out $(CERTS_DIR)/ca.key 4096 2>/dev/null; \
@@ -61,8 +70,13 @@ generate-ca:
 # Generate Elasticsearch certificate
 generate-elasticsearch-cert:
 	@echo "$(BLUE)Generating Elasticsearch certificate...$(NC)"
+	@if [ "$(FORCE)" = "1" ]; then \
+		echo "$(YELLOW)Force flag set, regenerating Elasticsearch certificate...$(NC)"; \
+		rm -f $(CERTS_DIR)/elasticsearch.crt $(CERTS_DIR)/elasticsearch.key; \
+	fi
 	@if [ -f "$(CERTS_DIR)/elasticsearch.crt" ] && [ -f "$(CERTS_DIR)/elasticsearch.key" ]; then \
 		echo "$(YELLOW)Elasticsearch certificate already exists, skipping generation$(NC)"; \
+		echo "$(YELLOW)Use 'make init-force' or 'make FORCE=1 init' to regenerate$(NC)"; \
 	else \
 		echo "$(GREEN)Creating Elasticsearch private key (2048-bit RSA)...$(NC)"; \
 		openssl genrsa -out $(CERTS_DIR)/elasticsearch.key 2048 2>/dev/null; \
@@ -84,8 +98,13 @@ generate-elasticsearch-cert:
 # Generate Authelia certificate
 generate-authelia-cert:
 	@echo "$(BLUE)Generating Authelia certificate...$(NC)"
+	@if [ "$(FORCE)" = "1" ]; then \
+		echo "$(YELLOW)Force flag set, regenerating Authelia certificate...$(NC)"; \
+		rm -f $(CERTS_DIR)/authelia.crt $(CERTS_DIR)/authelia.key; \
+	fi
 	@if [ -f "$(CERTS_DIR)/authelia.crt" ] && [ -f "$(CERTS_DIR)/authelia.key" ]; then \
 		echo "$(YELLOW)Authelia certificate already exists, skipping generation$(NC)"; \
+		echo "$(YELLOW)Use 'make init-force' or 'make FORCE=1 init' to regenerate$(NC)"; \
 	else \
 		echo "$(GREEN)Creating Authelia private key (2048-bit RSA)...$(NC)"; \
 		openssl genrsa -out $(CERTS_DIR)/authelia.key 2048 2>/dev/null; \
@@ -103,3 +122,7 @@ generate-authelia-cert:
 		rm -f $(CERTS_DIR)/authelia.csr $(CERTS_DIR)/authelia.ext; \
 		echo "$(GREEN)✓ Authelia certificate generated successfully$(NC)"; \
 	fi
+
+# Force initialization - regenerate all certificates and configs
+init-force: ## Force regenerate all certificates and configs
+	@$(MAKE) FORCE=1 init

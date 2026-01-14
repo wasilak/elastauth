@@ -406,3 +406,94 @@ ps: ## Show running containers
 
 # Alias for ps target
 status: ps ## Display formatted service status (alias for ps)
+
+# Clean target with confirmation - removes containers, volumes, certs, and configs
+clean: ## Remove containers, volumes, certs, and configs (with confirmation)
+	@echo "$(RED)========================================$(NC)"
+	@echo "$(RED)WARNING: Cleanup Operation$(NC)"
+	@echo "$(RED)========================================$(NC)"
+	@echo ""
+	@echo "$(YELLOW)This will:$(NC)"
+	@echo "  - Stop and remove all containers"
+	@echo "  - Remove all Docker volumes (data will be lost)"
+	@echo "  - Remove generated certificates in $(CERTS_DIR)/"
+	@echo "  - Remove generated configurations in $(CONFIGS_DIR)/"
+	@echo ""
+	@echo "$(RED)This operation cannot be undone!$(NC)"
+	@echo ""
+	@read -p "Are you sure you want to continue? [y/N] " -n 1 -r; \
+	echo ""; \
+	if [[ $$REPLY =~ ^[Yy]$$ ]]; then \
+		echo ""; \
+		echo "$(BLUE)Starting cleanup...$(NC)"; \
+		echo ""; \
+		echo "$(YELLOW)Step 1: Stopping and removing containers...$(NC)"; \
+		docker-compose down -v 2>/dev/null || true; \
+		echo "$(GREEN)✓ Containers and volumes removed$(NC)"; \
+		echo ""; \
+		echo "$(YELLOW)Step 2: Removing generated certificates...$(NC)"; \
+		if [ -d "$(CERTS_DIR)" ]; then \
+			rm -rf $(CERTS_DIR)/*; \
+			echo "$(GREEN)✓ Certificates removed$(NC)"; \
+		else \
+			echo "$(YELLOW)No certificates directory found$(NC)"; \
+		fi; \
+		echo ""; \
+		echo "$(YELLOW)Step 3: Removing generated configurations...$(NC)"; \
+		if [ -d "$(CONFIGS_DIR)" ]; then \
+			rm -rf $(CONFIGS_DIR)/*; \
+			echo "$(GREEN)✓ Configurations removed$(NC)"; \
+		else \
+			echo "$(YELLOW)No configurations directory found$(NC)"; \
+		fi; \
+		echo ""; \
+		echo "$(GREEN)========================================$(NC)"; \
+		echo "$(GREEN)✓ Cleanup Complete!$(NC)"; \
+		echo "$(GREEN)========================================$(NC)"; \
+		echo ""; \
+		echo "$(YELLOW)To start fresh:$(NC)"; \
+		echo "  1. Run: $(BLUE)make init$(NC)"; \
+		echo "  2. Run: $(BLUE)make up$(NC)"; \
+		echo ""; \
+	else \
+		echo ""; \
+		echo "$(YELLOW)Cleanup cancelled$(NC)"; \
+		echo ""; \
+	fi
+
+# Clean-all target - force clean without confirmation
+clean-all: ## Force clean without confirmation
+	@echo "$(RED)========================================$(NC)"
+	@echo "$(RED)Force Cleanup (No Confirmation)$(NC)"
+	@echo "$(RED)========================================$(NC)"
+	@echo ""
+	@echo "$(BLUE)Starting cleanup...$(NC)"
+	@echo ""
+	@echo "$(YELLOW)Step 1: Stopping and removing containers...$(NC)"
+	@docker-compose down -v 2>/dev/null || true
+	@echo "$(GREEN)✓ Containers and volumes removed$(NC)"
+	@echo ""
+	@echo "$(YELLOW)Step 2: Removing generated certificates...$(NC)"
+	@if [ -d "$(CERTS_DIR)" ]; then \
+		rm -rf $(CERTS_DIR)/*; \
+		echo "$(GREEN)✓ Certificates removed$(NC)"; \
+	else \
+		echo "$(YELLOW)No certificates directory found$(NC)"; \
+	fi
+	@echo ""
+	@echo "$(YELLOW)Step 3: Removing generated configurations...$(NC)"
+	@if [ -d "$(CONFIGS_DIR)" ]; then \
+		rm -rf $(CONFIGS_DIR)/*; \
+		echo "$(GREEN)✓ Configurations removed$(NC)"; \
+	else \
+		echo "$(YELLOW)No configurations directory found$(NC)"; \
+	fi
+	@echo ""
+	@echo "$(GREEN)========================================$(NC)"
+	@echo "$(GREEN)✓ Cleanup Complete!$(NC)"
+	@echo "$(GREEN)========================================$(NC)"
+	@echo ""
+	@echo "$(YELLOW)To start fresh:$(NC)"
+	@echo "  1. Run: $(BLUE)make init$(NC)"
+	@echo "  2. Run: $(BLUE)make up$(NC)"
+	@echo ""

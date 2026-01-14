@@ -1,0 +1,14 @@
+version: "3.8"
+
+networks:
+  elastauth-demo:
+    driver: bridge
+
+volumes:
+  elasticsearch-data:
+    driver: local
+  redis-data:
+    driver: local
+
+services:
+  # Services will be added in subsequent tasks

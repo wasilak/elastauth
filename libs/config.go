@@ -1144,3 +1144,45 @@ func GetEffectiveProxyConfig() map[string]interface{} {
 	
 	return config
 }
+
+// BuildProxyConfig creates a ProxyConfig struct from viper configuration
+func BuildProxyConfig() (*ProxyConfig, error) {
+	if !viper.GetBool("proxy.enabled") {
+		return nil, nil
+	}
+
+	// Parse timeout
+	timeoutStr := viper.GetString("proxy.timeout")
+	timeout, err := time.ParseDuration(timeoutStr)
+	if err != nil {
+		return nil, fmt.Errorf("invalid proxy.timeout: %w", err)
+	}
+
+	// Parse idle connection timeout
+	idleTimeoutStr := viper.GetString("proxy.idle_conn_timeout")
+	idleTimeout, err := time.ParseDuration(idleTimeoutStr)
+	if err != nil {
+		return nil, fmt.Errorf("invalid proxy.idle_conn_timeout: %w", err)
+	}
+
+	// Build TLS configuration
+	tlsConfig := TLSConfig{
+		Enabled:            viper.GetBool("proxy.tls.enabled"),
+		InsecureSkipVerify: viper.GetBool("proxy.tls.insecure_skip_verify"),
+		CACert:             viper.GetString("proxy.tls.ca_cert"),
+		ClientCert:         viper.GetString("proxy.tls.client_cert"),
+		ClientKey:          viper.GetString("proxy.tls.client_key"),
+	}
+
+	// Build proxy configuration
+	config := &ProxyConfig{
+		Enabled:          true,
+		ElasticsearchURL: viper.GetString("proxy.elasticsearch_url"),
+		Timeout:          timeout,
+		MaxIdleConns:     viper.GetInt("proxy.max_idle_conns"),
+		IdleConnTimeout:  idleTimeout,
+		TLS:              tlsConfig,
+	}
+
+	return config, nil
+}

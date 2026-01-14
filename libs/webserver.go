@@ -18,6 +18,7 @@ import (
 	"github.com/labstack/echo/v4/middleware"
 	slogecho "github.com/samber/slog-echo"
 	"github.com/spf13/viper"
+	"github.com/wasilak/elastauth/cache"
 	"go.opentelemetry.io/contrib/instrumentation/github.com/labstack/echo/otelecho"
 	"go.opentelemetry.io/otel"
 )
@@ -81,8 +82,56 @@ func WebserverInit(ctx context.Context) {
 	e.GET("/ready", ReadinessRoute)    // Kubernetes readiness probe
 	e.GET("/live", LivenessRoute)      // Kubernetes liveness probe
 
-	// Start server with graceful shutdown
-	StartServerWithGracefulShutdown(ctx, e)
+	// Check if proxy mode is enabled and build proxy configuration
+	proxyConfig, err := BuildProxyConfig()
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to build proxy configuration", slog.Any("error", err))
+		os.Exit(1)
+	}
+	
+	var server http.Handler = e
+	
+	if proxyConfig != nil && proxyConfig.Enabled {
+		slog.InfoContext(ctx, "Proxy mode enabled, initializing proxy server")
+		
+		// Get auth provider
+		authProvider, err := getAuthProvider()
+		if err != nil {
+			slog.ErrorContext(ctx, "Failed to get auth provider for proxy mode", slog.Any("error", err))
+			os.Exit(1)
+		}
+		
+		// Get cache manager
+		cacheManager := cache.CacheInstance
+		if cacheManager == nil {
+			slog.ErrorContext(ctx, "Cache manager is required for proxy mode")
+			os.Exit(1)
+		}
+		
+		// Initialize proxy server
+		proxyServer, err := InitProxyServer(proxyConfig, authProvider, cacheManager)
+		if err != nil {
+			slog.ErrorContext(ctx, "Failed to initialize proxy server", slog.Any("error", err))
+			os.Exit(1)
+		}
+		
+		// Create router in transparent proxy mode
+		router := NewRouter(TransparentProxyMode, e, proxyServer)
+		server = router
+		
+		slog.InfoContext(ctx, "Router initialized in transparent proxy mode")
+	} else {
+		slog.InfoContext(ctx, "Auth-only mode enabled")
+		
+		// Create router in auth-only mode (no proxy server needed)
+		router := NewRouter(AuthOnlyMode, e, nil)
+		server = router
+		
+		slog.InfoContext(ctx, "Router initialized in auth-only mode")
+	}
+
+	// Start server with graceful shutdown using the router
+	StartServerWithRouter(ctx, server)
 }
 
 // StartServerWithGracefulShutdown starts the Echo server with graceful shutdown support
@@ -112,6 +161,46 @@ func StartServerWithGracefulShutdown(ctx context.Context, e *echo.Echo) {
 	slog.InfoContext(ctx, "Shutting down server gracefully...")
 	
 	if err := e.Shutdown(shutdownCtx); err != nil {
+		slog.ErrorContext(ctx, "Server forced to shutdown", slog.Any("error", err))
+		os.Exit(1)
+	}
+
+	slog.InfoContext(ctx, "Server shutdown complete")
+}
+
+// StartServerWithRouter starts the HTTP server with the router and graceful shutdown support
+func StartServerWithRouter(ctx context.Context, handler http.Handler) {
+	// Create HTTP server
+	listenAddr := viper.GetString("listen")
+	server := &http.Server{
+		Addr:    listenAddr,
+		Handler: handler,
+	}
+
+	// Start server in a goroutine
+	go func() {
+		slog.InfoContext(ctx, "Starting server", slog.String("address", listenAddr))
+		
+		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			slog.ErrorContext(ctx, "Server failed to start", slog.Any("error", err))
+			os.Exit(1)
+		}
+	}()
+
+	// Wait for interrupt signal to gracefully shutdown the server
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
+	
+	sig := <-quit
+	slog.InfoContext(ctx, "Received shutdown signal", slog.String("signal", sig.String()))
+
+	// Create a context with timeout for graceful shutdown
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	slog.InfoContext(ctx, "Shutting down server gracefully...")
+	
+	if err := server.Shutdown(shutdownCtx); err != nil {
 		slog.ErrorContext(ctx, "Server forced to shutdown", slog.Any("error", err))
 		os.Exit(1)
 	}

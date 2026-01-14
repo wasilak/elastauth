@@ -84,6 +84,7 @@ func TestReadinessRoute(t *testing.T) {
 		assert.Contains(t, response.Checks, "cache")
 		assert.Contains(t, response.Checks, "provider")
 		assert.NotEmpty(t, response.Timestamp)
+		assert.Equal(t, "auth-only", response.Mode) // Verify mode is included
 		
 		// All checks should be OK
 		assert.Equal(t, "OK", response.Checks["elasticsearch"].Status)
@@ -108,6 +109,7 @@ func TestLivenessRoute(t *testing.T) {
 		assert.Equal(t, "OK", response.Status)
 		assert.NotEmpty(t, response.Timestamp)
 		assert.NotEmpty(t, response.Uptime)
+		assert.Equal(t, "auth-only", response.Mode) // Verify mode is included
 	}
 }
 
@@ -119,6 +121,7 @@ func TestReadinessRoute_ElasticsearchFailure(t *testing.T) {
 	viper.Set("elasticsearch_dry_run", false) // Don't use dry run to test actual failure
 	viper.Set("cache.type", "memory")
 	viper.Set("auth_provider", "authelia")
+	viper.Set("proxy.enabled", true) // Enable proxy mode to test Elasticsearch check
 
 	defer func() {
 		viper.Set("elasticsearch_host", "")
@@ -127,6 +130,7 @@ func TestReadinessRoute_ElasticsearchFailure(t *testing.T) {
 		viper.Set("elasticsearch_dry_run", false)
 		viper.Set("cache.type", "")
 		viper.Set("auth_provider", "")
+		viper.Set("proxy.enabled", false)
 	}()
 
 	e := echo.New()
@@ -144,6 +148,7 @@ func TestReadinessRoute_ElasticsearchFailure(t *testing.T) {
 		assert.Equal(t, "NOT_READY", response.Status)
 		assert.Equal(t, "ERROR", response.Checks["elasticsearch"].Status)
 		assert.NotEmpty(t, response.Checks["elasticsearch"].Error)
+		assert.Equal(t, "proxy", response.Mode) // Verify mode is included
 	}
 }
 

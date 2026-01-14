@@ -38,6 +38,7 @@ type ReadinessResponse struct {
 	Checks       map[string]CheckResult `json:"checks"`
 	Timestamp    string                 `json:"timestamp"`
 	Version      string                 `json:"version,omitempty"`
+	Mode         string                 `json:"mode"` // "auth-only" or "proxy"
 }
 
 // LivenessResponse represents the response for liveness probe
@@ -45,6 +46,7 @@ type LivenessResponse struct {
 	Status    string `json:"status"`
 	Timestamp string `json:"timestamp"`
 	Uptime    string `json:"uptime"`
+	Mode      string `json:"mode"` // "auth-only" or "proxy"
 }
 
 // CheckResult represents the result of a health check
@@ -389,7 +391,13 @@ func ReadinessRoute(c echo.Context) error {
 	overallStatus := "OK"
 	httpStatus := http.StatusOK
 
-	// Check Elasticsearch connectivity
+	// Determine operating mode
+	mode := "auth-only"
+	if viper.GetBool("proxy.enabled") {
+		mode = "proxy"
+	}
+
+	// Check Elasticsearch connectivity (only in proxy mode)
 	elasticsearchCheck := checkElasticsearchReadiness(ctx)
 	checks["elasticsearch"] = elasticsearchCheck
 	if elasticsearchCheck.Status != "OK" {
@@ -418,6 +426,7 @@ func ReadinessRoute(c echo.Context) error {
 		Checks:    checks,
 		Timestamp: time.Now().UTC().Format(time.RFC3339),
 		Version:   GetAppVersion(),
+		Mode:      mode,
 	}
 
 	return c.JSON(httpStatus, response)
@@ -432,10 +441,17 @@ func LivenessRoute(c echo.Context) error {
 
 	uptime := time.Since(startTime).String()
 
+	// Determine operating mode
+	mode := "auth-only"
+	if viper.GetBool("proxy.enabled") {
+		mode = "proxy"
+	}
+
 	response := LivenessResponse{
 		Status:    "OK",
 		Timestamp: time.Now().UTC().Format(time.RFC3339),
 		Uptime:    uptime,
+		Mode:      mode,
 	}
 
 	return c.JSON(http.StatusOK, response)
@@ -443,6 +459,14 @@ func LivenessRoute(c echo.Context) error {
 
 // checkElasticsearchReadiness checks if Elasticsearch is accessible
 func checkElasticsearchReadiness(ctx context.Context) CheckResult {
+	// In auth-only mode, skip Elasticsearch connectivity check
+	if !viper.GetBool("proxy.enabled") {
+		return CheckResult{
+			Status:  "OK",
+			Message: "Elasticsearch check skipped in auth-only mode",
+		}
+	}
+
 	if GetElasticsearchDryRun() {
 		return CheckResult{
 			Status:  "OK",

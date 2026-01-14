@@ -156,7 +156,7 @@ This implementation plan transforms elastauth into a dual-mode authentication pr
   - **Property 24: Input Validation**
   - **Validates: Requirements 12.4**
 
-- [-] 11. Add proxy metrics
+- [x] 11. Add proxy metrics
   - Add proxy-specific metrics to Prometheus
   - Track request count, latency, and error rate
   - Track cache hit/miss rate
@@ -167,7 +167,7 @@ This implementation plan transforms elastauth into a dual-mode authentication pr
   - **Property 23: Metrics Exposure**
   - **Validates: Requirements 11.5**
 
-- [ ] 12. Clean up obsolete proxy_client code
+- [x] 12. Clean up obsolete proxy_client code
   - Remove `libs/proxy_client.go` (no longer needed with goproxy)
   - Remove `libs/proxy_client_test.go`
   - Verify no other code references these files

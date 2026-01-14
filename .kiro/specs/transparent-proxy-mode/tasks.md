@@ -145,7 +145,7 @@ This implementation plan transforms elastauth into a dual-mode authentication pr
   - **Property 19: Log Sanitization**
   - **Validates: Requirements 9.5, 12.3**
 
-- [ ] 10. Implement input validation
+- [x] 10. Implement input validation
   - Create `ValidateProxyRequest` function
   - Validate headers, query parameters, and body
   - Sanitize inputs before proxying
@@ -156,7 +156,7 @@ This implementation plan transforms elastauth into a dual-mode authentication pr
   - **Property 24: Input Validation**
   - **Validates: Requirements 12.4**
 
-- [ ] 11. Add proxy metrics
+- [-] 11. Add proxy metrics
   - Add proxy-specific metrics to Prometheus
   - Track request count, latency, and error rate
   - Track cache hit/miss rate

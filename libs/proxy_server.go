@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/elazarl/goproxy"
 	"github.com/spf13/viper"
@@ -52,14 +53,27 @@ func InitProxyServer(config *ProxyConfig, authProvider provider.AuthProvider, ca
 	// Set verbose mode to false for production, can be made configurable later
 	proxy.Verbose = false
 
+	// Add request tracking handler (runs first to track all requests)
+	proxy.OnRequest().DoFunc(func(r *http.Request, ctx *goproxy.ProxyCtx) (*http.Request, *http.Response) {
+		// Increment active requests counter
+		IncrementActiveRequests()
+		
+		// Store start time in context for latency tracking
+		ctx.UserData = map[string]interface{}{
+			"start_time": time.Now(),
+		}
+		
+		return r, nil
+	})
+
 	// Add authentication handler
-	// This handler runs first and validates the request using the auth provider
+	// This handler runs second and validates the request using the auth provider
 	proxy.OnRequest().DoFunc(func(r *http.Request, ctx *goproxy.ProxyCtx) (*http.Request, *http.Response) {
 		return handleAuthentication(r, ctx, authProvider)
 	})
 
 	// Add credential injection handler
-	// This handler runs second and injects Elasticsearch credentials into the request
+	// This handler runs third and injects Elasticsearch credentials into the request
 	proxy.OnRequest().DoFunc(func(r *http.Request, ctx *goproxy.ProxyCtx) (*http.Request, *http.Response) {
 		return handleCredentialInjection(r, ctx, config, cacheManager)
 	})
@@ -102,6 +116,10 @@ func handleAuthentication(r *http.Request, ctx *goproxy.ProxyCtx, authProvider p
 	// Extract user info from request using auth provider
 	userInfo, err := authProvider.GetUser(r.Context(), authReq)
 	if err != nil {
+		// Record authentication failure metric
+		RecordAuthenticationFailure()
+		RecordProxyError("auth_failed")
+		
 		slog.ErrorContext(r.Context(), "Authentication failed",
 			slog.String("error", err.Error()),
 			slog.String("method", r.Method),
@@ -115,9 +133,14 @@ func handleAuthentication(r *http.Request, ctx *goproxy.ProxyCtx, authProvider p
 			http.StatusUnauthorized,
 			"Authentication failed: "+err.Error())
 	}
+	
+	// Record authentication success metric
+	RecordAuthenticationSuccess()
 
 	// Validate username
 	if err := ValidateUsername(userInfo.Username); err != nil {
+		RecordProxyError("invalid_username")
+		
 		slog.ErrorContext(r.Context(), "Invalid username format",
 			slog.String("error", err.Error()),
 			slog.String("username", userInfo.Username),
@@ -133,6 +156,8 @@ func handleAuthentication(r *http.Request, ctx *goproxy.ProxyCtx, authProvider p
 	// Validate email if provided
 	if userInfo.Email != "" {
 		if err := ValidateEmail(userInfo.Email); err != nil {
+			RecordProxyError("invalid_email")
+			
 			slog.ErrorContext(r.Context(), "Invalid email format",
 				slog.String("error", err.Error()),
 				slog.String("email", userInfo.Email),
@@ -149,6 +174,8 @@ func handleAuthentication(r *http.Request, ctx *goproxy.ProxyCtx, authProvider p
 	// Validate full name if provided
 	if userInfo.FullName != "" {
 		if err := ValidateName(userInfo.FullName); err != nil {
+			RecordProxyError("invalid_name")
+			
 			slog.ErrorContext(r.Context(), "Invalid name format",
 				slog.String("error", err.Error()),
 				slog.String("name", userInfo.FullName),
@@ -166,6 +193,8 @@ func handleAuthentication(r *http.Request, ctx *goproxy.ProxyCtx, authProvider p
 	if len(userInfo.Groups) > 0 {
 		for _, group := range userInfo.Groups {
 			if err := ValidateGroupName(group); err != nil {
+				RecordProxyError("invalid_group")
+				
 				slog.ErrorContext(r.Context(), "Invalid group name",
 					slog.String("error", err.Error()),
 					slog.String("group", group),
@@ -181,7 +210,15 @@ func handleAuthentication(r *http.Request, ctx *goproxy.ProxyCtx, authProvider p
 	}
 
 	// Store user info in context for next handler
-	ctx.UserData = userInfo
+	// We need to preserve the start_time from the tracking handler
+	if userDataMap, ok := ctx.UserData.(map[string]interface{}); ok {
+		userDataMap["user_info"] = userInfo
+	} else {
+		// Fallback if tracking handler didn't run
+		ctx.UserData = map[string]interface{}{
+			"user_info": userInfo,
+		}
+	}
 
 	slog.DebugContext(r.Context(), "Authentication successful",
 		slog.String("username", userInfo.Username),
@@ -210,6 +247,8 @@ func handleAuthentication(r *http.Request, ctx *goproxy.ProxyCtx, authProvider p
 func handleCredentialInjection(r *http.Request, ctx *goproxy.ProxyCtx, config *ProxyConfig, cacheManager cache.CacheInterface) (*http.Request, *http.Response) {
 	// Validate and sanitize proxy request to prevent injection attacks
 	if err := ValidateProxyRequest(r); err != nil {
+		RecordProxyError("invalid_request")
+		
 		slog.ErrorContext(r.Context(), "Request validation failed",
 			slog.String("error", err.Error()),
 			slog.String("method", r.Method),
@@ -223,8 +262,16 @@ func handleCredentialInjection(r *http.Request, ctx *goproxy.ProxyCtx, config *P
 	}
 
 	// Retrieve user info from context (set by authentication handler)
-	userInfo, ok := ctx.UserData.(*provider.UserInfo)
-	if !ok || userInfo == nil {
+	var userInfo *provider.UserInfo
+	if userDataMap, ok := ctx.UserData.(map[string]interface{}); ok {
+		if ui, ok := userDataMap["user_info"].(*provider.UserInfo); ok {
+			userInfo = ui
+		}
+	}
+	
+	if userInfo == nil {
+		RecordProxyError("missing_user_info")
+		
 		slog.ErrorContext(r.Context(), "User info not found in proxy context")
 		return r, goproxy.NewResponse(r,
 			goproxy.ContentTypeText,
@@ -235,6 +282,8 @@ func handleCredentialInjection(r *http.Request, ctx *goproxy.ProxyCtx, config *P
 	// Get or generate Elasticsearch credentials
 	credentials, err := getOrGenerateCredentials(r.Context(), userInfo, cacheManager)
 	if err != nil {
+		RecordProxyError("credential_generation_failed")
+		
 		slog.ErrorContext(r.Context(), "Failed to get or generate credentials",
 			slog.String("error", err.Error()),
 			slog.String("username", userInfo.Username),
@@ -252,6 +301,8 @@ func handleCredentialInjection(r *http.Request, ctx *goproxy.ProxyCtx, config *P
 	// Parse the target Elasticsearch URL
 	targetURL, err := parseElasticsearchURL(config.ElasticsearchURL)
 	if err != nil {
+		RecordProxyError("invalid_elasticsearch_url")
+		
 		slog.ErrorContext(r.Context(), "Failed to parse Elasticsearch URL",
 			slog.String("error", err.Error()),
 			slog.String("url", config.ElasticsearchURL),
@@ -291,22 +342,37 @@ func handleCredentialInjection(r *http.Request, ctx *goproxy.ProxyCtx, config *P
 // Returns:
 //   - *http.Response: The response (potentially with sanitized headers)
 func handleResponse(r *http.Response, ctx *goproxy.ProxyCtx) *http.Response {
+	// Decrement active requests counter
+	defer DecrementActiveRequests()
+	
 	// Handle nil response (shouldn't happen, but be defensive)
 	if r == nil {
 		slog.Error("Received nil response from Elasticsearch")
+		RecordProxyError("nil_response")
 		return r
 	}
 
 	// Get request context for logging
 	reqCtx := context.Background()
+	var method string
 	if ctx.Req != nil {
 		reqCtx = ctx.Req.Context()
+		method = ctx.Req.Method
 	}
 
 	// Extract user info from context if available
 	var username string
-	if userInfo, ok := ctx.UserData.(*provider.UserInfo); ok && userInfo != nil {
-		username = userInfo.Username
+	if userDataMap, ok := ctx.UserData.(map[string]interface{}); ok {
+		// Get start time for latency calculation
+		if startTime, ok := userDataMap["start_time"].(time.Time); ok {
+			duration := time.Since(startTime)
+			RecordProxyRequest(method, r.StatusCode, duration)
+		}
+		
+		// Get user info if available
+		if userInfo, ok := userDataMap["user_info"].(*provider.UserInfo); ok && userInfo != nil {
+			username = userInfo.Username
+		}
 	}
 
 	// Log response information
@@ -332,9 +398,6 @@ func handleResponse(r *http.Response, ctx *goproxy.ProxyCtx) *http.Response {
 	// Sanitize sensitive headers from the response
 	// This prevents credentials or tokens from being sent to the client
 	sanitizeResponseHeadersInPlace(r)
-
-	// TODO: Add metrics collection in task 11
-	// This will track request count, latency, error rate, etc.
 
 	return r
 }
@@ -447,6 +510,8 @@ func getOrGenerateCredentials(ctx context.Context, userInfo *provider.UserInfo, 
 	if cacheManager != nil {
 		encryptedPasswordBase64, exists := cacheManager.Get(ctx, cacheKey)
 		if exists {
+			RecordCacheHit()
+			
 			slog.DebugContext(ctx, "Cache hit for credentials", slog.String("username", userInfo.Username))
 			
 			// Decode from base64
@@ -473,8 +538,12 @@ func getOrGenerateCredentials(ctx context.Context, userInfo *provider.UserInfo, 
 				}
 			}
 		} else {
+			RecordCacheMiss()
+			
 			slog.DebugContext(ctx, "Cache miss for credentials", slog.String("username", userInfo.Username))
 		}
+	} else {
+		RecordCacheMiss()
 	}
 
 	// Generate new credentials

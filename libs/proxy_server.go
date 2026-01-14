@@ -1,11 +1,15 @@
 package libs
 
 import (
+	"context"
+	"encoding/base64"
 	"fmt"
 	"log/slog"
 	"net/http"
+	"net/url"
 
 	"github.com/elazarl/goproxy"
+	"github.com/spf13/viper"
 	"github.com/wasilak/elastauth/cache"
 	"github.com/wasilak/elastauth/provider"
 )
@@ -53,6 +57,12 @@ func InitProxyServer(config *ProxyConfig, authProvider provider.AuthProvider, ca
 		return handleAuthentication(r, ctx, authProvider)
 	})
 
+	// Add credential injection handler
+	// This handler runs second and injects Elasticsearch credentials into the request
+	proxy.OnRequest().DoFunc(func(r *http.Request, ctx *goproxy.ProxyCtx) (*http.Request, *http.Response) {
+		return handleCredentialInjection(r, ctx, config, cacheManager)
+	})
+
 	slog.Info("Proxy server initialized",
 		"elasticsearch_url", config.ElasticsearchURL,
 		"timeout", config.Timeout,
@@ -60,7 +70,6 @@ func InitProxyServer(config *ProxyConfig, authProvider provider.AuthProvider, ca
 		"tls_enabled", config.TLS.Enabled,
 	)
 
-	// TODO: Add credential injection handler in task 4
 	// TODO: Add response handler in task 5
 
 	return proxy, nil
@@ -179,10 +188,76 @@ func handleAuthentication(r *http.Request, ctx *goproxy.ProxyCtx, authProvider p
 	return r, nil
 }
 
-// handleCredentialInjection gets/generates ES credentials and injects them
-// This will be implemented in task 4
+// handleCredentialInjection gets/generates ES credentials and injects them.
+// It retrieves the authenticated user info from the proxy context, gets or generates
+// Elasticsearch credentials (with caching), and injects them as Basic Auth headers.
+// It also rewrites the request URL to target the configured Elasticsearch cluster.
+//
+// Parameters:
+//   - r: The incoming HTTP request
+//   - ctx: The goproxy context containing UserData from authentication handler
+//   - config: Proxy configuration with Elasticsearch URL
+//   - cacheManager: Cache interface for storing/retrieving credentials
+//
+// Returns:
+//   - *http.Request: The modified request with credentials and rewritten URL
+//   - *http.Response: nil on success, or an error response (500) on failure
 func handleCredentialInjection(r *http.Request, ctx *goproxy.ProxyCtx, config *ProxyConfig, cacheManager cache.CacheInterface) (*http.Request, *http.Response) {
-	// Implementation will be added in task 4
+	// Retrieve user info from context (set by authentication handler)
+	userInfo, ok := ctx.UserData.(*provider.UserInfo)
+	if !ok || userInfo == nil {
+		slog.ErrorContext(r.Context(), "User info not found in proxy context")
+		return r, goproxy.NewResponse(r,
+			goproxy.ContentTypeText,
+			http.StatusInternalServerError,
+			"Internal server error: user info not available")
+	}
+
+	// Get or generate Elasticsearch credentials
+	credentials, err := getOrGenerateCredentials(r.Context(), userInfo, cacheManager)
+	if err != nil {
+		slog.ErrorContext(r.Context(), "Failed to get or generate credentials",
+			slog.String("error", err.Error()),
+			slog.String("username", userInfo.Username),
+		)
+		return r, goproxy.NewResponse(r,
+			goproxy.ContentTypeText,
+			http.StatusInternalServerError,
+			"Failed to generate credentials: "+err.Error())
+	}
+
+	// Inject Basic Auth header
+	r.SetBasicAuth(credentials.Username, credentials.Password)
+
+	// Rewrite request URL to target Elasticsearch
+	// Parse the target Elasticsearch URL
+	targetURL, err := parseElasticsearchURL(config.ElasticsearchURL)
+	if err != nil {
+		slog.ErrorContext(r.Context(), "Failed to parse Elasticsearch URL",
+			slog.String("error", err.Error()),
+			slog.String("url", config.ElasticsearchURL),
+		)
+		return r, goproxy.NewResponse(r,
+			goproxy.ContentTypeText,
+			http.StatusInternalServerError,
+			"Internal server error: invalid Elasticsearch URL")
+	}
+
+	// Rewrite the request URL to point to Elasticsearch
+	r.URL.Scheme = targetURL.Scheme
+	r.URL.Host = targetURL.Host
+	r.Host = targetURL.Host
+
+	// Preserve the original path and query parameters
+	// The path is already set in r.URL.Path from the original request
+
+	slog.DebugContext(r.Context(), "Credential injection successful",
+		slog.String("username", credentials.Username),
+		slog.String("target_host", r.URL.Host),
+		slog.String("path", r.URL.Path),
+	)
+
+	// Return nil response to continue proxying
 	return r, nil
 }
 
@@ -191,4 +266,166 @@ func handleCredentialInjection(r *http.Request, ctx *goproxy.ProxyCtx, config *P
 func handleResponse(r *http.Response, ctx *goproxy.ProxyCtx) *http.Response {
 	// Implementation will be added in task 5
 	return r
+}
+
+// UserCredentials holds Elasticsearch credentials for a user
+type UserCredentials struct {
+	Username string
+	Password string
+}
+
+// getOrGenerateCredentials retrieves cached credentials or generates new ones.
+// It checks the cache first, and if credentials are not found, generates new ones,
+// upserts the user in Elasticsearch (if not in dry run mode), and caches the encrypted password.
+//
+// Parameters:
+//   - ctx: Context for the request
+//   - userInfo: User information from authentication provider
+//   - cacheManager: Cache interface for storing/retrieving credentials
+//
+// Returns:
+//   - *UserCredentials: The user's Elasticsearch credentials
+//   - error: Any error encountered during credential generation or caching
+func getOrGenerateCredentials(ctx context.Context, userInfo *provider.UserInfo, cacheManager cache.CacheInterface) (*UserCredentials, error) {
+	// Build cache key
+	cacheKey := "elastauth-" + EncodeForCacheKey(userInfo.Username)
+	
+	// Get encryption key from configuration
+	key := viper.GetString("secret_key")
+	if key == "" {
+		return nil, fmt.Errorf("secret_key not configured")
+	}
+
+	// Check cache first
+	if cacheManager != nil {
+		encryptedPasswordBase64, exists := cacheManager.Get(ctx, cacheKey)
+		if exists {
+			slog.DebugContext(ctx, "Cache hit for credentials", slog.String("username", userInfo.Username))
+			
+			// Decode from base64
+			decryptedPasswordBase64, err := base64.URLEncoding.DecodeString(encryptedPasswordBase64.(string))
+			if err != nil {
+				slog.WarnContext(ctx, "Failed to decode cached password, regenerating",
+					slog.String("error", err.Error()),
+					slog.String("username", userInfo.Username),
+				)
+			} else {
+				// Decrypt password
+				password, err := Decrypt(ctx, string(decryptedPasswordBase64), key)
+				if err != nil {
+					slog.WarnContext(ctx, "Failed to decrypt cached password, regenerating",
+						slog.String("error", err.Error()),
+						slog.String("username", userInfo.Username),
+					)
+				} else {
+					// Successfully retrieved from cache
+					return &UserCredentials{
+						Username: userInfo.Username,
+						Password: password,
+					}, nil
+				}
+			}
+		} else {
+			slog.DebugContext(ctx, "Cache miss for credentials", slog.String("username", userInfo.Username))
+		}
+	}
+
+	// Generate new credentials
+	slog.DebugContext(ctx, "Generating new credentials", slog.String("username", userInfo.Username))
+	
+	password, err := GenerateTemporaryUserPassword(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate password: %w", err)
+	}
+
+	// Get user roles based on groups
+	roles := GetUserRoles(ctx, userInfo.Groups)
+
+	// Create Elasticsearch user object
+	elasticsearchUserMetadata := ElasticsearchUserMetadata{
+		Groups: userInfo.Groups,
+	}
+
+	elasticsearchUser := ElasticsearchUser{
+		Password: password,
+		Enabled:  true,
+		Email:    userInfo.Email,
+		FullName: userInfo.FullName,
+		Roles:    roles,
+		Metadata: elasticsearchUserMetadata,
+	}
+
+	// Upsert user in Elasticsearch (if not dry run)
+	if !GetElasticsearchDryRun() {
+		// Initialize Elasticsearch client
+		hosts := GetElasticsearchHosts()
+		if len(hosts) == 0 {
+			return nil, fmt.Errorf("no Elasticsearch hosts configured")
+		}
+
+		err := initElasticClient(
+			ctx,
+			hosts,
+			GetElasticsearchUsername(),
+			GetElasticsearchPassword(),
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to initialize Elasticsearch client: %w", err)
+		}
+
+		err = UpsertUser(ctx, userInfo.Username, elasticsearchUser)
+		if err != nil {
+			return nil, fmt.Errorf("failed to upsert user in Elasticsearch: %w", err)
+		}
+	}
+
+	// Cache encrypted password
+	if cacheManager != nil {
+		encryptedPassword, err := Encrypt(ctx, password, key)
+		if err != nil {
+			slog.WarnContext(ctx, "Failed to encrypt password for caching",
+				slog.String("error", err.Error()),
+				slog.String("username", userInfo.Username),
+			)
+		} else {
+			encryptedPasswordBase64 := base64.URLEncoding.EncodeToString([]byte(encryptedPassword))
+			cacheManager.Set(ctx, cacheKey, encryptedPasswordBase64)
+			slog.DebugContext(ctx, "Cached encrypted credentials", slog.String("username", userInfo.Username))
+		}
+	}
+
+	return &UserCredentials{
+		Username: userInfo.Username,
+		Password: password,
+	}, nil
+}
+
+// parseElasticsearchURL parses and validates the Elasticsearch URL from configuration.
+// It returns a parsed URL structure that can be used to rewrite request URLs.
+//
+// Parameters:
+//   - elasticsearchURL: The Elasticsearch URL from configuration
+//
+// Returns:
+//   - *url.URL: Parsed URL structure
+//   - error: Any error encountered during parsing
+func parseElasticsearchURL(elasticsearchURL string) (*url.URL, error) {
+	if elasticsearchURL == "" {
+		return nil, fmt.Errorf("elasticsearch URL is empty")
+	}
+
+	parsedURL, err := url.Parse(elasticsearchURL)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse URL: %w", err)
+	}
+
+	if parsedURL.Scheme == "" {
+		return nil, fmt.Errorf("URL scheme is missing (must be http or https)")
+	}
+
+	if parsedURL.Host == "" {
+		return nil, fmt.Errorf("URL host is missing")
+	}
+
+	return parsedURL, nil
 }

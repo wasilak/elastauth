@@ -491,6 +491,120 @@ ps: ## Show running containers
 # Alias for ps target
 status: ps ## Display formatted service status (alias for ps)
 
+# Test target - run health checks on all services
+test: ## Run health checks on all services
+	@echo "$(BLUE)========================================$(NC)"
+	@echo "$(BLUE)elastauth Demo Environment - Health Checks$(NC)"
+	@echo "$(BLUE)========================================$(NC)"
+	@echo ""
+	@echo "$(YELLOW)Running health checks on all services...$(NC)"
+	@echo ""
+	@PASS_COUNT=0; \
+	FAIL_COUNT=0; \
+	echo "$(BLUE)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(NC)"; \
+	echo "$(BLUE)  Service Health Checks$(NC)"; \
+	echo "$(BLUE)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(NC)"; \
+	echo ""; \
+	echo "$(YELLOW)1. Checking Elasticsearch...$(NC)"; \
+	if curl -k -s -u elastic:demo-password-change-me https://localhost:9200/_cluster/health > /dev/null 2>&1; then \
+		echo "   $(GREEN)✓ PASS$(NC) - Elasticsearch is healthy"; \
+		echo "   Endpoint: https://localhost:9200/_cluster/health"; \
+		PASS_COUNT=$$((PASS_COUNT + 1)); \
+	else \
+		echo "   $(RED)✗ FAIL$(NC) - Elasticsearch is not responding"; \
+		echo "   Endpoint: https://localhost:9200/_cluster/health"; \
+		echo "   $(YELLOW)Tip: Check if service is running with 'make ps'$(NC)"; \
+		FAIL_COUNT=$$((FAIL_COUNT + 1)); \
+	fi; \
+	echo ""; \
+	echo "$(YELLOW)2. Checking Authelia...$(NC)"; \
+	if curl -s http://localhost:9091/api/health > /dev/null 2>&1; then \
+		echo "   $(GREEN)✓ PASS$(NC) - Authelia is healthy"; \
+		echo "   Endpoint: http://localhost:9091/api/health"; \
+		PASS_COUNT=$$((PASS_COUNT + 1)); \
+	else \
+		echo "   $(RED)✗ FAIL$(NC) - Authelia is not responding"; \
+		echo "   Endpoint: http://localhost:9091/api/health"; \
+		echo "   $(YELLOW)Tip: Check if service is running with 'make ps'$(NC)"; \
+		FAIL_COUNT=$$((FAIL_COUNT + 1)); \
+	fi; \
+	echo ""; \
+	echo "$(YELLOW)3. Checking Redis...$(NC)"; \
+	if docker exec redis-demo redis-cli ping > /dev/null 2>&1; then \
+		echo "   $(GREEN)✓ PASS$(NC) - Redis is healthy"; \
+		echo "   Connection: localhost:6379"; \
+		PASS_COUNT=$$((PASS_COUNT + 1)); \
+	else \
+		echo "   $(RED)✗ FAIL$(NC) - Redis is not responding"; \
+		echo "   Connection: localhost:6379"; \
+		echo "   $(YELLOW)Tip: Check if service is running with 'make ps'$(NC)"; \
+		FAIL_COUNT=$$((FAIL_COUNT + 1)); \
+	fi; \
+	echo ""; \
+	echo "$(YELLOW)4. Checking elastauth...$(NC)"; \
+	if curl -s http://localhost:3000/health > /dev/null 2>&1; then \
+		echo "   $(GREEN)✓ PASS$(NC) - elastauth is healthy"; \
+		echo "   Endpoint: http://localhost:3000/health"; \
+		PASS_COUNT=$$((PASS_COUNT + 1)); \
+	else \
+		echo "   $(RED)✗ FAIL$(NC) - elastauth is not responding"; \
+		echo "   Endpoint: http://localhost:3000/health"; \
+		echo "   $(YELLOW)Tip: Check if service is running with 'make ps'$(NC)"; \
+		FAIL_COUNT=$$((FAIL_COUNT + 1)); \
+	fi; \
+	echo ""; \
+	echo "$(BLUE)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(NC)"; \
+	echo "$(BLUE)  Test Results$(NC)"; \
+	echo "$(BLUE)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(NC)"; \
+	echo ""; \
+	echo "  $(GREEN)Passed:$(NC) $$PASS_COUNT / 4"; \
+	echo "  $(RED)Failed:$(NC) $$FAIL_COUNT / 4"; \
+	echo ""; \
+	if [ $$FAIL_COUNT -eq 0 ]; then \
+		echo "$(GREEN)✓ All health checks passed!$(NC)"; \
+		echo ""; \
+		echo "$(YELLOW)The demo environment is ready to use.$(NC)"; \
+	else \
+		echo "$(RED)✗ Some health checks failed.$(NC)"; \
+		echo ""; \
+		echo "$(YELLOW)Troubleshooting steps:$(NC)"; \
+		echo "  1. Check service status: $(BLUE)make ps$(NC)"; \
+		echo "  2. View service logs: $(BLUE)make logs$(NC)"; \
+		echo "  3. Wait a bit longer for services to start (they may still be initializing)"; \
+		echo "  4. Restart services: $(BLUE)make restart$(NC)"; \
+	fi; \
+	echo ""; \
+	echo "$(BLUE)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(NC)"; \
+	echo "$(BLUE)  Manual Testing Examples$(NC)"; \
+	echo "$(BLUE)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(NC)"; \
+	echo ""; \
+	echo "$(YELLOW)Test Elasticsearch directly:$(NC)"; \
+	echo "  curl -k -u elastic:demo-password-change-me https://localhost:9200/_cluster/health"; \
+	echo ""; \
+	echo "$(YELLOW)Test Authelia health:$(NC)"; \
+	echo "  curl http://localhost:9091/api/health"; \
+	echo ""; \
+	echo "$(YELLOW)Test Redis connectivity:$(NC)"; \
+	echo "  docker exec redis-demo redis-cli ping"; \
+	echo ""; \
+	echo "$(YELLOW)Test elastauth health:$(NC)"; \
+	echo "  curl http://localhost:3000/health"; \
+	echo ""; \
+	echo "$(YELLOW)Test authentication flow through elastauth:$(NC)"; \
+	echo "  curl -H \"Remote-User: admin\" \\"; \
+	echo "       -H \"Remote-Groups: admins\" \\"; \
+	echo "       -H \"Remote-Email: admin@example.com\" \\"; \
+	echo "       -H \"Remote-Name: Admin User\" \\"; \
+	echo "       http://localhost:3000/"; \
+	echo ""; \
+	echo "$(YELLOW)Query Elasticsearch through elastauth:$(NC)"; \
+	echo "  curl -H \"Remote-User: admin\" \\"; \
+	echo "       -H \"Remote-Groups: admins\" \\"; \
+	echo "       http://localhost:3000/_cluster/health"; \
+	echo ""; \
+	echo "$(YELLOW)For more information: $(BLUE)make info$(NC)"; \
+	echo ""
+
 # Info target - display connection information and credentials
 info: ## Display connection information and credentials
 	@echo "$(BLUE)========================================$(NC)"

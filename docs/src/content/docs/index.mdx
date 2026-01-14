@@ -153,10 +153,66 @@ elastauth supports a wide range of authentication providers:
   - Azure AD
   - And many more...
 
+## Operating Modes
+
+elastauth supports two deployment modes to fit different architectures:
+
+### Authentication-Only Mode (Default)
+
+Works with reverse proxies like Traefik using forward authentication:
+
+```
+Client → Traefik → elastauth (auth) → Traefik → Elasticsearch
+```
+
+**Best for:**
+- Existing Traefik deployments
+- Multi-service architectures
+- Advanced routing needs
+
+[Learn more about Authentication-Only Mode →](/elastauth/deployment/auth-only-mode)
+
+### Transparent Proxy Mode
+
+Acts as a complete authentication proxy:
+
+```
+Client → elastauth (auth + proxy) → Elasticsearch
+```
+
+**Best for:**
+- Standalone deployments
+- Simpler architecture
+- Direct proxy control
+
+[Learn more about Transparent Proxy Mode →](/elastauth/deployment/proxy-mode)
+
+### Choosing a Mode
+
+```mermaid
+graph TD
+    A[Do you use Traefik?] -->|Yes| B[Authentication-Only Mode]
+    A -->|No| C[Need multiple services?]
+    C -->|Yes| B
+    C -->|No| D[Need advanced routing?]
+    D -->|Yes| B
+    D -->|No| E[Transparent Proxy Mode]
+    
+    style B fill:#e1f5e1
+    style E fill:#e1f5e1
+```
+
+[Compare Operating Modes →](/elastauth/deployment/modes)
+
 ## Next Steps
 
 ### 📚 Learn the Fundamentals
 - **[Core Concepts](/elastauth/getting-started/concepts)** - Understand elastauth's architecture and principles
+- **[Operating Modes](/elastauth/deployment/modes)** - Choose the right deployment mode
+
+### 🚀 Deploy elastauth
+- **[Authentication-Only Mode](/elastauth/deployment/auth-only-mode)** - Deploy with Traefik forward auth
+- **[Transparent Proxy Mode](/elastauth/deployment/proxy-mode)** - Deploy as direct proxy
 
 ### 🔧 Configure Authentication
 - **[Authentication Providers](/elastauth/providers/)** - Choose and configure your auth system

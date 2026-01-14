@@ -180,7 +180,7 @@ This implementation plan transforms elastauth into a dual-mode authentication pr
   - Update README with proxy mode usage
   - _Requirements: 1.5, 7.1, 7.2, 7.3, 7.5_
 
-- [ ] 14. Create comprehensive usage documentation
+- [-] 14. Create comprehensive usage documentation
   - Create `docs/src/content/docs/deployment/auth-only-mode.md`
     - Document auth-only mode (Traefik forward auth scenario)
     - Include Traefik middleware configuration examples

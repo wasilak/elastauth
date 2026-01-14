@@ -8,7 +8,7 @@ This demo environment provides a complete authentication proxy setup that demons
 
 - **Authelia**: File-based authentication server providing user authentication
 - **elastauth**: Authentication proxy that validates headers and proxies requests to Elasticsearch
-- **Elasticsearch 9.1**: Secure backend with TLS enabled and X-Pack security (fully open source under AGPL)
+- **Elasticsearch 9.2.4**: Secure backend with TLS enabled and X-Pack security (fully open source under AGPL)
 - **Redis**: Session storage and caching layer
 
 The environment is designed for local testing and demonstration purposes, with automated certificate generation, configuration management, and convenient Makefile targets for easy operation.
@@ -331,7 +331,7 @@ make test
 
 2. Update `configs/authelia/users_database.yml` with the new hash
 
-3. Restart Authelia: `docker-compose restart authelia`
+3. Restart Authelia: `docker compose restart authelia`
 
 ### Adding Authelia Users
 
@@ -354,7 +354,7 @@ users:
       - users
 ```
 
-Restart Authelia: `docker-compose restart authelia`
+Restart Authelia: `docker compose restart authelia`
 
 ### Modifying Elasticsearch Configuration
 
@@ -367,7 +367,7 @@ environment:
   # Add your custom settings here
 ```
 
-Restart Elasticsearch: `docker-compose restart elasticsearch`
+Restart Elasticsearch: `docker compose restart elasticsearch`
 
 ### Changing Service Ports
 
@@ -390,7 +390,7 @@ Edit `configs/elastauth/config.yml` to modify:
 - Cache configuration
 - Logging settings
 
-Restart elastauth: `docker-compose restart elastauth`
+Restart elastauth: `docker compose restart elastauth`
 
 ## Directory Structure
 
@@ -539,7 +539,7 @@ make up  # Rebuilds elastauth image
 ### Testing Configuration Changes
 
 1. Modify configuration files in `configs/`
-2. Restart affected service: `docker-compose restart <service>`
+2. Restart affected service: `docker compose restart <service>`
 3. Check logs: `make logs SERVICE=<service>`
 4. Verify with health checks: `make test`
 

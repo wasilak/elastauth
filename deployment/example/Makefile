@@ -414,8 +414,8 @@ up: ## Start all services in detached mode
 	@echo "$(BLUE)Starting elastauth Demo Services$(NC)"
 	@echo "$(BLUE)========================================$(NC)"
 	@echo ""
-	@echo "$(GREEN)Starting services with docker-compose...$(NC)"
-	@docker-compose up -d
+	@echo "$(GREEN)Starting services with docker compose...$(NC)"
+	@docker compose up -d
 	@echo ""
 	@echo "$(GREEN)========================================$(NC)"
 	@echo "$(GREEN)✓ Services Started!$(NC)"
@@ -441,7 +441,7 @@ down: ## Stop and remove all containers
 	@echo "$(BLUE)========================================$(NC)"
 	@echo ""
 	@echo "$(YELLOW)Stopping and removing containers...$(NC)"
-	@docker-compose down
+	@docker compose down
 	@echo ""
 	@echo "$(GREEN)✓ Services stopped and containers removed$(NC)"
 	@echo ""
@@ -460,10 +460,10 @@ restart: ## Restart all services
 logs: ## Display logs from all services with timestamps
 	@if [ -n "$(SERVICE)" ]; then \
 		echo "$(BLUE)Displaying logs for service: $(SERVICE)$(NC)"; \
-		docker-compose logs --timestamps $(SERVICE); \
+		docker compose logs --timestamps $(SERVICE); \
 	else \
 		echo "$(BLUE)Displaying logs from all services$(NC)"; \
-		docker-compose logs --timestamps; \
+		docker compose logs --timestamps; \
 	fi
 	@echo ""
 	@echo "$(YELLOW)Tip: Use 'make logs SERVICE=<service-name>' to view specific service logs$(NC)"
@@ -473,10 +473,10 @@ logs: ## Display logs from all services with timestamps
 logs-follow: ## Follow logs in real-time
 	@if [ -n "$(SERVICE)" ]; then \
 		echo "$(BLUE)Following logs for service: $(SERVICE)$(NC)"; \
-		docker-compose logs --timestamps --follow $(SERVICE); \
+		docker compose logs --timestamps --follow $(SERVICE); \
 	else \
 		echo "$(BLUE)Following logs from all services$(NC)"; \
-		docker-compose logs --timestamps --follow; \
+		docker compose logs --timestamps --follow; \
 	fi
 
 # Show running containers
@@ -485,7 +485,7 @@ ps: ## Show running containers
 	@echo "$(BLUE)elastauth Demo Services Status$(NC)"
 	@echo "$(BLUE)========================================$(NC)"
 	@echo ""
-	@docker-compose ps
+	@docker compose ps
 	@echo ""
 
 # Alias for ps target
@@ -729,7 +729,7 @@ clean: ## Remove containers, volumes, certs, and configs (with confirmation)
 		echo "$(BLUE)Starting cleanup...$(NC)"; \
 		echo ""; \
 		echo "$(YELLOW)Step 1: Stopping and removing containers...$(NC)"; \
-		docker-compose down -v 2>/dev/null || true; \
+		docker compose down -v 2>/dev/null || true; \
 		echo "$(GREEN)✓ Containers and volumes removed$(NC)"; \
 		echo ""; \
 		echo "$(YELLOW)Step 2: Removing generated certificates...$(NC)"; \
@@ -771,7 +771,7 @@ clean-all: ## Force clean without confirmation
 	@echo "$(BLUE)Starting cleanup...$(NC)"
 	@echo ""
 	@echo "$(YELLOW)Step 1: Stopping and removing containers...$(NC)"
-	@docker-compose down -v 2>/dev/null || true
+	@docker compose down -v 2>/dev/null || true
 	@echo "$(GREEN)✓ Containers and volumes removed$(NC)"
 	@echo ""
 	@echo "$(YELLOW)Step 2: Removing generated certificates...$(NC)"

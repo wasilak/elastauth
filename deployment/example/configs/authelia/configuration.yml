@@ -1,0 +1,50 @@
+---
+# Authelia Configuration for elastauth Demo
+
+server:
+  address: "tcp://0.0.0.0:9091"
+
+log:
+  level: "info"
+
+# File-based authentication backend
+authentication_backend:
+  file:
+    path: "/config/users_database.yml"
+    password:
+      algorithm: "argon2id"
+      iterations: 3
+      key_length: 32
+      salt_length: 16
+      memory: 65536
+      parallelism: 4
+
+# Session configuration with Redis storage
+session:
+  secret: "4C7NzehAp798AWGIN481t7AImVuG4i1kpMZ7nUSk28o="
+  cookies:
+    - domain: "127.0.0.1"
+      authelia_url: "http://127.0.0.1:9091"
+  redis:
+    host: "redis"
+    port: 6379
+
+# Local SQLite storage for Authelia data
+storage:
+  encryption_key: "xK9mP2vN8qR5tY7wZ3bC6dF1gH4jL0sA"
+  local:
+    path: "/config/db.sqlite3"
+
+# Identity validation for password reset
+identity_validation:
+  reset_password:
+    jwt_secret: "nQ8rT3vW6yZ9bE2fH5kM8pS1uX4aD7gJ"
+
+# Access control - require one factor authentication
+access_control:
+  default_policy: "one_factor"
+
+# Filesystem notifier for demo purposes
+notifier:
+  filesystem:
+    filename: "/config/notification.txt"

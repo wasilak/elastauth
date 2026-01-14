@@ -1,0 +1,15 @@
+# Generated certificates
+certs/
+
+# Generated configuration files
+configs/
+
+# Environment variables
+.env
+
+# Docker volumes
+volumes/
+
+# Temporary files
+*.tmp
+*.log

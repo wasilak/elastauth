@@ -1,0 +1,274 @@
+# elastauth Configuration Example
+# 
+# This file demonstrates all available configuration options for elastauth.
+# Copy this file to config.yml and customize for your deployment.
+#
+# Configuration Precedence (highest to lowest):
+#   1. Environment variables (ELASTAUTH_* prefix)
+#   2. Configuration file (config.yml)
+#   3. Default values
+#
+# For production deployments, use environment variables for sensitive values
+# like passwords and secrets.
+
+# ============================================================================
+# Operating Mode Configuration
+# ============================================================================
+
+# Proxy mode enables transparent proxy functionality
+# When enabled, elastauth acts as a full HTTP proxy to Elasticsearch
+# When disabled (default), elastauth operates in authentication-only mode
+proxy:
+  enabled: false  # Set to true to enable transparent proxy mode
+  
+  # Elasticsearch target URL for proxy mode
+  # Required when proxy.enabled is true
+  # Must include protocol (http:// or https://)
+  elasticsearch_url: "https://elasticsearch:9200"
+  
+  # Request timeout for proxied requests
+  # Format: duration string (e.g., "30s", "1m", "500ms")
+  timeout: "30s"
+  
+  # HTTP connection pool settings
+  max_idle_conns: 100        # Maximum idle connections in pool
+  idle_conn_timeout: "90s"   # How long idle connections are kept
+  
+  # TLS configuration for Elasticsearch connections
+  tls:
+    enabled: true                    # Enable TLS for Elasticsearch
+    insecure_skip_verify: false      # Skip certificate verification (dev only!)
+    ca_cert: "/path/to/ca.crt"       # CA certificate path
+    client_cert: "/path/to/client.crt"  # Client certificate (optional)
+    client_key: "/path/to/client.key"   # Client key (optional)
+
+# ============================================================================
+# Authentication Provider Configuration
+# ============================================================================
+
+# Select authentication provider: authelia, oidc, or casdoor
+auth_provider: "authelia"
+
+# Authelia Provider Configuration (header-based authentication)
+authelia:
+  header_username: "Remote-User"    # Header containing username
+  header_groups: "Remote-Groups"    # Header containing groups (comma-separated)
+  header_email: "Remote-Email"      # Header containing email
+  header_name: "Remote-Name"        # Header containing full name
+
+# OIDC Provider Configuration (JWT token authentication)
+oidc:
+  # Required OIDC settings
+  issuer: "https://your-oidc-provider.com"
+  client_id: "elastauth"
+  client_secret: "your-client-secret"
+  
+  # Optional: Manual endpoint configuration (auto-discovered from issuer if not set)
+  authorization_endpoint: ""  # OAuth2 authorization endpoint
+  token_endpoint: ""          # OAuth2 token endpoint
+  userinfo_endpoint: ""       # OIDC userinfo endpoint
+  jwks_uri: ""                # JWKS endpoint for token validation
+  
+  # OAuth2 settings
+  scopes:
+    - openid
+    - profile
+    - email
+    - groups
+  
+  # Client authentication method: client_secret_basic or client_secret_post
+  client_auth_method: "client_secret_basic"
+  
+  # Token validation method: jwks, userinfo, or both
+  token_validation: "jwks"
+  
+  # Use PKCE (Proof Key for Code Exchange) for enhanced security
+  use_pkce: true
+  
+  # Claim mappings: map OIDC claims to elastauth user attributes
+  claim_mappings:
+    username: "preferred_username"  # Claim for username
+    email: "email"                  # Claim for email
+    groups: "groups"                # Claim for groups (array)
+    full_name: "name"               # Claim for full name
+  
+  # Custom headers to send with OIDC requests (optional)
+  custom_headers:
+    X-Custom-Header: "value"
+
+# Casdoor Provider Configuration
+casdoor:
+  endpoint: "https://your-casdoor-instance.com"
+  client_id: "your-client-id"
+  client_secret: "your-client-secret"
+  organization: "built-in"    # Casdoor organization name
+  application: "app-built-in" # Casdoor application name
+
+# ============================================================================
+# Elasticsearch Configuration
+# ============================================================================
+
+# Elasticsearch connection settings
+# elastauth needs admin access to create/update users and roles
+elasticsearch:
+  # Elasticsearch cluster endpoints (supports multiple hosts for failover)
+  hosts:
+    - "https://elasticsearch:9200"
+    # - "https://elasticsearch-2:9200"  # Additional hosts for failover
+  
+  # Admin credentials for user management
+  username: "elastic"
+  password: "changeme"
+  
+  # Dry run mode: validate authentication without creating Elasticsearch users
+  # Useful for testing authentication flow without modifying Elasticsearch
+  dry_run: false
+
+# Legacy single-host configuration (deprecated, use elasticsearch.hosts instead)
+# elasticsearch_host: "https://elasticsearch:9200"
+# elasticsearch_username: "elastic"
+# elasticsearch_password: "changeme"
+# elasticsearch_dry_run: false
+
+# ============================================================================
+# Cache Configuration
+# ============================================================================
+
+# Cache configuration for credential caching
+# Supports: memory, redis, file, or empty for no caching
+cache:
+  type: "redis"  # Options: memory, redis, file, or empty
+  
+  # Cache expiration time (how long credentials are cached)
+  # Format: duration string (e.g., "1h", "30m", "3600s")
+  expiration: "1h"
+  
+  # Redis cache settings (when type is "redis")
+  redis_host: "localhost:6379"  # Redis server address
+  redis_db: 0                   # Redis database number (0-15)
+  
+  # File cache settings (when type is "file")
+  path: "/tmp/elastauth-cache"  # Directory for cache files
+
+# Notes on cache types:
+# - memory: Fast, but limits deployment to single instance
+# - redis: Supports horizontal scaling with shared Redis instance
+# - file: Persistent, but limits deployment to single instance
+# - empty/disabled: No caching, supports horizontal scaling
+
+# ============================================================================
+# Security Configuration
+# ============================================================================
+
+# Encryption secret key for credential encryption
+# REQUIRED: Must be 64 hex characters (32 bytes for AES-256)
+# Generate with: elastauth --generateKey
+# Or: openssl rand -hex 32
+secret_key: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+
+# Default Elasticsearch roles assigned to authenticated users
+# These roles determine what users can access in Elasticsearch/Kibana
+default_roles:
+  - "kibana_user"
+  - "monitoring_user"
+
+# ============================================================================
+# Server Configuration
+# ============================================================================
+
+# Server listen address
+# Format: "host:port" or ":port" for all interfaces
+listen: "0.0.0.0:3000"
+
+# ============================================================================
+# Logging Configuration
+# ============================================================================
+
+# Log level: debug, info, warn, error
+log_level: "info"
+
+# Log format: json or text
+# Use json for structured logging in production
+log_format: "json"
+
+# ============================================================================
+# Monitoring Configuration
+# ============================================================================
+
+# Enable Prometheus metrics endpoint at /metrics
+enable_metrics: true
+
+# Enable OpenTelemetry tracing
+enableOtel: false
+
+# ============================================================================
+# Environment Variable Reference
+# ============================================================================
+#
+# All configuration options can be set via environment variables with
+# ELASTAUTH_ prefix. Nested settings use underscores.
+#
+# Examples:
+#   ELASTAUTH_AUTH_PROVIDER=oidc
+#   ELASTAUTH_PROXY_ENABLED=true
+#   ELASTAUTH_PROXY_ELASTICSEARCH_URL=https://es:9200
+#   ELASTAUTH_PROXY_TIMEOUT=30s
+#   ELASTAUTH_PROXY_TLS_ENABLED=true
+#   ELASTAUTH_PROXY_TLS_INSECURE_SKIP_VERIFY=false
+#   ELASTAUTH_PROXY_TLS_CA_CERT=/certs/ca.crt
+#   ELASTAUTH_OIDC_ISSUER=https://provider.com
+#   ELASTAUTH_OIDC_CLIENT_SECRET=secret
+#   ELASTAUTH_OIDC_SCOPES=openid,profile,email
+#   ELASTAUTH_ELASTICSEARCH_USERNAME=elastic
+#   ELASTAUTH_ELASTICSEARCH_PASSWORD=changeme
+#   ELASTAUTH_SECRET_KEY=0123...
+#   ELASTAUTH_CACHE_TYPE=redis
+#   ELASTAUTH_CACHE_REDIS_HOST=redis:6379
+#   ELASTAUTH_LOG_LEVEL=info
+#
+# See full list: elastauth --help or check documentation
+
+# ============================================================================
+# Deployment Scenarios
+# ============================================================================
+#
+# Scenario 1: Authentication-Only Mode with Traefik
+# --------------------------------------------------
+# Use elastauth as a forward auth middleware with Traefik
+# Traefik handles proxying, elastauth only validates authentication
+#
+# Configuration:
+#   proxy.enabled: false (default)
+#   auth_provider: authelia (or oidc)
+#
+# Architecture:
+#   Client → Traefik → elastauth (auth only) → Traefik → Elasticsearch
+#
+# Benefits:
+#   - Leverage Traefik's advanced routing and load balancing
+#   - Centralized reverse proxy for multiple services
+#   - elastauth focuses solely on authentication
+#
+# See: docs/deployment/auth-only-mode.md
+#
+# Scenario 2: Transparent Proxy Mode
+# -----------------------------------
+# Use elastauth as a complete authentication proxy
+# elastauth handles both authentication and proxying
+#
+# Configuration:
+#   proxy.enabled: true
+#   proxy.elasticsearch_url: https://elasticsearch:9200
+#   auth_provider: authelia (or oidc)
+#
+# Architecture:
+#   Client → elastauth (auth + proxy) → Elasticsearch
+#
+# Benefits:
+#   - Simpler architecture (fewer components)
+#   - Single point of authentication and proxying
+#   - Direct control over proxy behavior
+#
+# See: docs/deployment/proxy-mode.md
+#
+# ============================================================================

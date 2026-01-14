@@ -2,163 +2,63 @@
 
 [![Docker Repository on Quay](https://quay.io/repository/wasilak/elastauth/status "Docker Repository on Quay")](https://quay.io/repository/wasilak/elastauth) [![CI](https://github.com/wasilak/elastauth/actions/workflows/main.yml/badge.svg)](https://github.com/wasilak/elastauth/actions/workflows/main.yml) [![Go Reference](https://pkg.go.dev/badge/github.com/wasilak/elastauth.svg)](https://pkg.go.dev/github.com/wasilak/elastauth)
 
-**A stateless authentication proxy for Elasticsearch and Kibana with pluggable authentication providers.**
+A stateless authentication proxy for Elasticsearch and Kibana with pluggable authentication providers.
 
-elastauth bridges authentication systems with Elasticsearch/Kibana by:
-- Extracting user information from various authentication providers
-- Managing temporary Elasticsearch user credentials
-- Providing seamless access to Kibana without paid subscriptions
+## What is elastauth?
 
-## 🚀 Quick Start
+elastauth bridges authentication systems with Elasticsearch/Kibana by managing temporary user credentials and providing seamless access without paid subscriptions. It supports two operating modes:
 
-### Authelia (Header-based)
-```yaml
-auth_provider: "authelia"
-elasticsearch:
-  hosts: ["http://localhost:9200"]
-  username: "elastauth"
-  password: "your-password"
-default_roles: ["kibana_user"]
-secret_key: "your-32-character-secret-key"
-```
+- **Authentication-Only Mode**: Works with reverse proxies like Traefik for forward authentication
+- **Transparent Proxy Mode**: Handles both authentication and proxying in a single service
 
-### OAuth2/OIDC (JWT tokens)
-```yaml
-auth_provider: "oidc"
-oidc:
-  issuer: "https://your-provider.com"
-  client_id: "elastauth"
-  client_secret: "your-secret"
-  claim_mappings:
-    username: "preferred_username"
-    email: "email"
-    groups: "groups"
-    full_name: "name"
-elasticsearch:
-  hosts: ["http://localhost:9200"]
-  username: "elastauth"
-  password: "your-password"
-default_roles: ["kibana_user"]
-secret_key: "your-32-character-secret-key"
-```
-
-## 📖 Documentation
-
-### Core Concepts
-- **[Architecture Overview](docs/concepts.md)** - How elastauth works
-- **[API Documentation](docs/openapi.yaml)** - OpenAPI specification
-- **[Interactive API Docs](/docs)** - Swagger UI (when running)
-
-### Authentication Providers
-- **[Authelia Provider](docs/providers/authelia.md)** - Header-based authentication
-- **[OAuth2/OIDC Provider](docs/providers/oidc.md)** - JWT token authentication
-  - Supports: Keycloak, Casdoor, Authentik, Auth0, Azure AD, Pocket-ID, Ory Hydra
-
-### Caching & Performance
-- **[Cache Providers](docs/cache/README.md)** - Memory, Redis, File caching
-- **[Redis Cache](docs/cache/redis.md)** - Distributed caching for scaling
-- **[Horizontal Scaling](docs/concepts.md#deployment-patterns)** - Multi-instance deployments
-
-### Configuration & Deployment
-- **[Configuration Examples](docs/examples/README.md)** - Complete setup examples
-- **[Kubernetes Deployment](docs/examples/kubernetes.md)** - Production-ready K8s setup
-- **[Docker Compose](docs/examples/docker-compose.md)** - Local development stack
-- **[Troubleshooting](docs/troubleshooting.md)** - Common issues and solutions
-
-## 🔧 Supported Authentication Systems
-
-### Header-based (Authelia Provider)
-- **[Authelia](https://www.authelia.com/)** - Popular authentication server
-- **Traefik Forward Auth** - Any system that sets user headers
-- **Custom Headers** - Configurable header names
-
-### OAuth2/OIDC (Generic Provider)
-- **[Keycloak](https://www.keycloak.org/)** - Open source identity management
-- **[Casdoor](https://casdoor.org/)** - Web-based identity management  
-- **[Authentik](https://goauthentik.io/)** - Modern authentication platform
-- **[Auth0](https://auth0.com/)** - Cloud identity platform
-- **[Azure AD](https://azure.microsoft.com/services/active-directory/)** - Microsoft identity
-- **[Pocket-ID](https://github.com/stonith404/pocket-id)** - Self-hosted identity provider
-- **[Ory Hydra](https://www.ory.sh/hydra/)** - OAuth2 and OpenID Connect server
-
-## 🏗️ Architecture
-
-```text
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   Client        │    │   elastauth     │    │  Elasticsearch  │
-│   (Browser/App) │    │   Proxy         │    │   Cluster       │
-└─────────────────┘    └─────────────────┘    └─────────────────┘
-         │                       │                       │
-         │ 1. Auth Request       │                       │
-         │ (Headers/JWT/etc)     │                       │
-         ├──────────────────────►│                       │
-         │                       │ 2. Create/Update User │
-         │                       ├──────────────────────►│
-         │                       │                       │
-         │ 3. Authorization      │ 4. User Created       │
-         │    Header             │◄──────────────────────┤
-         │◄──────────────────────┤                       │
-         │                       │                       │
-         │ 5. Access Elasticsearch/Kibana               │
-         ├───────────────────────────────────────────────►│
-```
-
-**Key Features:**
-- **Stateless Operation** - No persistent authentication state
-- **Pluggable Providers** - Support for multiple authentication systems
-- **Credential Caching** - Encrypted temporary password caching
-- **Role Mapping** - Map user groups to Elasticsearch roles
-- **Horizontal Scaling** - Multi-instance support with Redis cache
-
-## 📥 Installation
-
-### Quick Clone (Recommended)
-For faster cloning, use shallow clone to avoid downloading full history:
-```bash
-git clone --depth 1 https://github.com/wasilak/elastauth.git
-```
-
-### Full Clone
-```bash
-git clone https://github.com/wasilak/elastauth.git
-```
-
-> **Note:** This repository contains historical `node_modules` in git history from documentation development. While these are now properly ignored, they increase the full clone size. Use `--depth 1` for faster downloads.
-
-## 🐳 Docker
+## Quick Start
 
 ```bash
-# Pull the image
+# Pull and run with Docker
 docker pull quay.io/wasilak/elastauth:latest
+docker run -v ./config.yml:/config.yml -p 3000:3000 quay.io/wasilak/elastauth:latest
 
-# Run with configuration
-docker run -v ./config.yml:/config.yml -p 5000:5000 quay.io/wasilak/elastauth:latest
+# Or clone and build
+git clone --depth 1 https://github.com/wasilak/elastauth.git
+cd elastauth
+go build
+./elastauth
 ```
 
-## 🔒 Security
+See [config.yml.example](config.yml.example) for configuration options.
 
-- **Credential Encryption** - All cached credentials encrypted with AES
-- **Input Validation** - All user input validated and sanitized  
-- **Secure Defaults** - Security-first configuration defaults
-- **No Password Storage** - Temporary passwords only, automatically rotated
+## Documentation
 
-## 📊 Monitoring
+📚 **[Full Documentation](https://wasilak.github.io/elastauth/)** - Complete guides, configuration reference, and deployment examples
 
-- **Health Checks** - `/health` endpoint for load balancers
-- **Configuration Info** - `/config` endpoint (sensitive values masked)
-- **Structured Logging** - JSON logs with request correlation
-- **OpenTelemetry** - Distributed tracing support
+Quick links:
+- [Getting Started](https://wasilak.github.io/elastauth/getting-started/concepts/)
+- [Configuration Guide](https://wasilak.github.io/elastauth/configuration/)
+- [Authentication Providers](https://wasilak.github.io/elastauth/providers/)
+- [Deployment Examples](https://wasilak.github.io/elastauth/deployment/)
 
-## 🤝 Contributing
+## Features
 
-1. **Issues** - Report bugs or request features via GitHub Issues
-2. **Pull Requests** - Contributions welcome following Go best practices
-3. **Documentation** - Help improve documentation and examples
+- **Dual Operating Modes** - Authentication-only or transparent proxy
+- **Pluggable Providers** - Authelia, OIDC, Casdoor support
+- **Stateless Operation** - No persistent authentication state
+- **Credential Caching** - Redis, memory, or file-based caching
+- **Horizontal Scaling** - Multi-instance deployments with Redis
+- **Security First** - AES-256 encryption, input validation, secure defaults
 
-## 📄 License
+## Built With
+
+- [Go](https://golang.org/) - Core language
+- [Echo](https://echo.labstack.com/) - HTTP framework
+- [Viper](https://github.com/spf13/viper) - Configuration management
+- [goproxy](https://github.com/elazarl/goproxy) - HTTP proxy functionality
+- [Elasticsearch Go Client](https://github.com/elastic/go-elasticsearch) - Elasticsearch integration
+- [Starlight](https://starlight.astro.build/) - Documentation site
+
+## Contributing
+
+Contributions welcome! Please check the [documentation](https://wasilak.github.io/elastauth/) for development guidelines.
+
+## License
 
 MIT License - see [LICENSE](LICENSE) file for details.
-
----
-
-**Need Help?** Check the [troubleshooting guide](docs/troubleshooting.md) or [open an issue](https://github.com/wasilak/elastauth/issues).

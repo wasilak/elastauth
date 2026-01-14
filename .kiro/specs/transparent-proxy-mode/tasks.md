@@ -173,7 +173,7 @@ This implementation plan transforms elastauth into a dual-mode authentication pr
   - Verify no other code references these files
   - _Requirements: N/A (cleanup task)_
 
-- [ ] 13. Update configuration documentation
+- [x] 13. Update configuration documentation
   - Update `config.yml` example with proxy configuration
   - Document all proxy environment variables
   - Add proxy mode examples

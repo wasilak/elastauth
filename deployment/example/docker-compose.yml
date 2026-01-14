@@ -89,3 +89,26 @@ services:
       timeout: 10s
       retries: 3
     restart: unless-stopped
+
+  elastauth:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    container_name: elastauth-demo
+    volumes:
+      - ./configs/elastauth/config.yml:/app/config.yml:ro
+      - ./certs:/certs:ro
+    ports:
+      - "3000:3000"
+    networks:
+      - elastauth-demo
+    environment:
+      - TZ=UTC
+    depends_on:
+      redis:
+        condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
+      authelia:
+        condition: service_healthy
+    restart: unless-stopped

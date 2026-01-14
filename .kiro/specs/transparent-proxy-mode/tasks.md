@@ -225,7 +225,7 @@ This implementation plan transforms elastauth into a dual-mode authentication pr
     - Compare with Traefik scenario
   - _Requirements: 1.4, 2.1, 2.2, 2.4, 2.5_
 
-- [ ] 17. Update main deployment example
+- [x] 17. Update main deployment example
   - Update `deployment/example/docker-compose.yml`
     - Add commented-out Traefik service
     - Add comments explaining both modes
@@ -236,7 +236,8 @@ This implementation plan transforms elastauth into a dual-mode authentication pr
     - Link to detailed mode-specific docs
   - _Requirements: 1.1, 1.2, 8.1_
 
-- [ ] 18. Write integration tests
+- [x] 18. Write integration tests
+  - have a look at integration_test.go -> it might already implement something or could be obsolete. Anyway, it needs to be handled
   - Create `libs/proxy_integration_test.go`
   - Test auth-only mode with mock Elasticsearch
   - Test proxy mode with mock Elasticsearch
@@ -248,14 +249,14 @@ This implementation plan transforms elastauth into a dual-mode authentication pr
   - **Property 7: Provider Support in Both Modes**
   - **Validates: Requirements 3.1, 3.2, 3.5**
 
-- [ ] 19. Checkpoint - Ensure all tests pass
+- [x] 19. Checkpoint - Ensure all tests pass
   - Run `go build` to verify compilation
   - Run `go test ./...` to verify all tests pass
   - Manually test auth-only mode
   - Manually test proxy mode
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 20. Update OpenAPI specification
+- [x] 20. Update OpenAPI specification
   - Update `docs/src/schemas/openapi.yaml`
   - Add proxy mode endpoints
   - Document proxy configuration

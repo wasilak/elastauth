@@ -6,12 +6,33 @@ info:
     with Elasticsearch and Kibana. It supports pluggable authentication providers including 
     Authelia (header-based) and OAuth2/OIDC providers.
     
+    ## Operating Modes
+    
+    elastauth supports two operating modes:
+    
+    - **Authentication-Only Mode** (default): Returns authentication headers for use with 
+      reverse proxies like Traefik. The proxy handles request forwarding.
+    - **Transparent Proxy Mode**: Authenticates requests and proxies them directly to 
+      Elasticsearch with injected credentials. No external proxy required.
+    
     ## Authentication Flow
     
-    1. Client sends request with authentication information (headers, tokens, etc.)
+    ### Authentication-Only Mode
+    
+    1. Client sends request to reverse proxy (e.g., Traefik)
+    2. Reverse proxy forwards auth request to elastauth
+    3. elastauth extracts user information using the configured provider
+    4. elastauth generates/retrieves temporary Elasticsearch credentials
+    5. elastauth returns Authorization header to reverse proxy
+    6. Reverse proxy forwards request to Elasticsearch with Authorization header
+    
+    ### Transparent Proxy Mode
+    
+    1. Client sends request directly to elastauth
     2. elastauth extracts user information using the configured provider
     3. elastauth generates/retrieves temporary Elasticsearch credentials
-    4. elastauth returns Authorization header for Elasticsearch/Kibana access
+    4. elastauth proxies request to Elasticsearch with injected credentials
+    5. elastauth forwards Elasticsearch response back to client
     
     ## Supported Providers
     
@@ -21,6 +42,9 @@ info:
     
     ## Documentation Links
     
+    - [Operating Modes](/elastauth/deployment/modes/) - Choosing between auth-only and proxy mode
+    - [Auth-Only Mode Setup](/elastauth/deployment/auth-only-mode/) - Traefik forward auth setup
+    - [Proxy Mode Setup](/elastauth/deployment/proxy-mode/) - Direct proxy setup
     - [Authelia Provider Documentation](/elastauth/providers/authelia/) - Header-based authentication setup
     - [OAuth2/OIDC Provider Documentation](/elastauth/providers/oidc/) - JWT token authentication setup
     - [Configuration Examples](/elastauth/getting-started/concepts/) - Complete configuration examples
@@ -43,17 +67,22 @@ servers:
 paths:
   /:
     get:
-      summary: Main authentication endpoint
+      summary: Main authentication endpoint (Auth-Only Mode)
       description: |
         Primary endpoint that processes authentication requests and returns 
         Elasticsearch authorization credentials. The authentication method depends 
         on the configured provider (headers for Authelia, JWT tokens for OIDC).
+        
+        **Note**: This endpoint is used in Authentication-Only Mode. In Transparent 
+        Proxy Mode, all non-special paths are proxied to Elasticsearch.
         
         **Provider Documentation:**
         - [Authelia Provider Setup](/elastauth/providers/authelia/)
         - [OAuth2/OIDC Provider Setup](/elastauth/providers/oidc/)
         - [Configuration Guide](/elastauth/getting-started/concepts/)
       operationId: authenticate
+      tags:
+        - Authentication
       security:
         - AutheliaHeaders: []
         - BearerAuth: []
@@ -129,11 +158,239 @@ paths:
                     code: 500
                     timestamp: "2024-01-15T10:30:04Z"
 
+  /{proxy+}:
+    get:
+      summary: Proxy endpoint (Transparent Proxy Mode)
+      description: |
+        In Transparent Proxy Mode, all requests to non-special paths are authenticated 
+        and proxied to Elasticsearch with injected credentials. This endpoint represents 
+        any Elasticsearch API path.
+        
+        **Special paths that bypass proxying:**
+        - `/health`, `/ready`, `/live` - Health check endpoints
+        - `/config` - Configuration endpoint
+        - `/docs`, `/api/openapi.yaml` - Documentation endpoints
+        - `/metrics` - Metrics endpoint
+        
+        **Related Documentation:**
+        - [Proxy Mode Setup](/elastauth/deployment/proxy-mode/)
+        - [Operating Modes](/elastauth/deployment/modes/)
+      operationId: proxyGet
+      tags:
+        - Proxy
+      security:
+        - AutheliaHeaders: []
+        - BearerAuth: []
+        - CookieAuth: []
+      parameters:
+        - name: proxy+
+          in: path
+          required: true
+          description: Elasticsearch API path (e.g., _search, _cat/indices, etc.)
+          schema:
+            type: string
+          example: "_search"
+      responses:
+        '200':
+          description: Successful proxy response from Elasticsearch
+          content:
+            application/json:
+              schema:
+                type: object
+                description: Response from Elasticsearch (varies by endpoint)
+        '400':
+          description: Bad request - Invalid authentication or request data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProxyErrorResponse'
+        '401':
+          description: Unauthorized - Authentication failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProxyErrorResponse'
+        '403':
+          description: Forbidden - Insufficient permissions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProxyErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProxyErrorResponse'
+        '502':
+          description: Bad Gateway - Elasticsearch unreachable or returned invalid response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProxyErrorResponse'
+              examples:
+                elasticsearch_down:
+                  summary: Elasticsearch unreachable
+                  value:
+                    message: "Failed to connect to Elasticsearch"
+                    code: 502
+                    request_id: "req-123456"
+                    timestamp: "2024-01-15T10:30:00Z"
+                    mode: "proxy"
+        '504':
+          description: Gateway Timeout - Elasticsearch request timed out
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProxyErrorResponse'
+              examples:
+                timeout:
+                  summary: Request timeout
+                  value:
+                    message: "Request to Elasticsearch timed out"
+                    code: 504
+                    request_id: "req-123457"
+                    timestamp: "2024-01-15T10:30:01Z"
+                    mode: "proxy"
+    
+    post:
+      summary: Proxy endpoint (Transparent Proxy Mode) - POST
+      description: |
+        Proxies POST requests to Elasticsearch with authentication and credential injection.
+      operationId: proxyPost
+      tags:
+        - Proxy
+      security:
+        - AutheliaHeaders: []
+        - BearerAuth: []
+        - CookieAuth: []
+      parameters:
+        - name: proxy+
+          in: path
+          required: true
+          description: Elasticsearch API path
+          schema:
+            type: string
+      requestBody:
+        description: Request body to forward to Elasticsearch
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Successful proxy response from Elasticsearch
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/paths/~1{proxy+}/get/responses/400'
+        '401':
+          $ref: '#/paths/~1{proxy+}/get/responses/401'
+        '403':
+          $ref: '#/paths/~1{proxy+}/get/responses/403'
+        '500':
+          $ref: '#/paths/~1{proxy+}/get/responses/500'
+        '502':
+          $ref: '#/paths/~1{proxy+}/get/responses/502'
+        '504':
+          $ref: '#/paths/~1{proxy+}/get/responses/504'
+    
+    put:
+      summary: Proxy endpoint (Transparent Proxy Mode) - PUT
+      description: |
+        Proxies PUT requests to Elasticsearch with authentication and credential injection.
+      operationId: proxyPut
+      tags:
+        - Proxy
+      security:
+        - AutheliaHeaders: []
+        - BearerAuth: []
+        - CookieAuth: []
+      parameters:
+        - name: proxy+
+          in: path
+          required: true
+          description: Elasticsearch API path
+          schema:
+            type: string
+      requestBody:
+        description: Request body to forward to Elasticsearch
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Successful proxy response from Elasticsearch
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/paths/~1{proxy+}/get/responses/400'
+        '401':
+          $ref: '#/paths/~1{proxy+}/get/responses/401'
+        '403':
+          $ref: '#/paths/~1{proxy+}/get/responses/403'
+        '500':
+          $ref: '#/paths/~1{proxy+}/get/responses/500'
+        '502':
+          $ref: '#/paths/~1{proxy+}/get/responses/502'
+        '504':
+          $ref: '#/paths/~1{proxy+}/get/responses/504'
+    
+    delete:
+      summary: Proxy endpoint (Transparent Proxy Mode) - DELETE
+      description: |
+        Proxies DELETE requests to Elasticsearch with authentication and credential injection.
+      operationId: proxyDelete
+      tags:
+        - Proxy
+      security:
+        - AutheliaHeaders: []
+        - BearerAuth: []
+        - CookieAuth: []
+      parameters:
+        - name: proxy+
+          in: path
+          required: true
+          description: Elasticsearch API path
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Successful proxy response from Elasticsearch
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/paths/~1{proxy+}/get/responses/400'
+        '401':
+          $ref: '#/paths/~1{proxy+}/get/responses/401'
+        '403':
+          $ref: '#/paths/~1{proxy+}/get/responses/403'
+        '500':
+          $ref: '#/paths/~1{proxy+}/get/responses/500'
+        '502':
+          $ref: '#/paths/~1{proxy+}/get/responses/502'
+        '504':
+          $ref: '#/paths/~1{proxy+}/get/responses/504'
+
   /health:
     get:
       summary: Health check endpoint
-      description: Returns the health status of the elastauth service
+      description: |
+        Returns the health status of the elastauth service. In Transparent Proxy Mode, 
+        this endpoint also checks Elasticsearch connectivity.
+        
+        **Related Documentation:**
+        - [Health Checks](/elastauth/guides/troubleshooting/)
       operationId: healthCheck
+      tags:
+        - Health
       responses:
         '200':
           description: Service is healthy
@@ -142,23 +399,88 @@ paths:
               schema:
                 $ref: '#/components/schemas/HealthResponse'
               examples:
-                healthy:
-                  summary: Service is healthy
+                healthy_auth_only:
+                  summary: Healthy (Auth-Only Mode)
                   value:
                     status: "OK"
+                    mode: "auth-only"
+                healthy_proxy:
+                  summary: Healthy (Proxy Mode)
+                  value:
+                    status: "OK"
+                    mode: "proxy"
+                    elasticsearch_status: "connected"
+        '503':
+          description: Service unavailable (Proxy Mode only - Elasticsearch unreachable)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+              examples:
+                elasticsearch_down:
+                  summary: Elasticsearch unreachable
+                  value:
+                    status: "ERROR"
+                    mode: "proxy"
+                    elasticsearch_status: "unreachable"
+  
+  /ready:
+    get:
+      summary: Readiness check endpoint
+      description: |
+        Returns the readiness status of the elastauth service. In Transparent Proxy Mode, 
+        checks Elasticsearch connectivity. In Auth-Only Mode, always returns ready if 
+        the service is running.
+      operationId: readinessCheck
+      tags:
+        - Health
+      responses:
+        '200':
+          description: Service is ready
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+        '503':
+          description: Service not ready (Proxy Mode - Elasticsearch unreachable)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+  
+  /live:
+    get:
+      summary: Liveness check endpoint
+      description: |
+        Returns the liveness status of the elastauth service. Always returns 200 if 
+        the process is running, regardless of Elasticsearch status.
+      operationId: livenessCheck
+      tags:
+        - Health
+      responses:
+        '200':
+          description: Service is alive
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
 
   /config:
     get:
       summary: Configuration information endpoint
       description: |
         Returns current configuration information including active authentication 
-        provider, cache settings, and role mappings. Sensitive values are masked.
+        provider, cache settings, role mappings, and proxy mode configuration. 
+        Sensitive values are masked.
         
         **Related Documentation:**
         - [Configuration Guide](/elastauth/getting-started/concepts/)
         - [Cache Configuration](/elastauth/cache/)
         - [Provider Configuration](/elastauth/providers/)
+        - [Proxy Mode Configuration](/elastauth/deployment/proxy-mode/)
       operationId: getConfig
+      tags:
+        - Configuration
       responses:
         '200':
           description: Configuration information
@@ -167,10 +489,11 @@ paths:
               schema:
                 $ref: '#/components/schemas/ConfigResponse'
               examples:
-                authelia_config:
-                  summary: Authelia provider configuration
+                authelia_auth_only:
+                  summary: Authelia provider (Auth-Only Mode)
                   value:
                     auth_provider: "authelia"
+                    mode: "auth-only"
                     cache:
                       type: "redis"
                       expiration: "1h"
@@ -189,10 +512,20 @@ paths:
                       header_groups: "Remote-Groups"
                       header_email: "Remote-Email"
                       header_name: "Remote-Name"
-                oidc_config:
-                  summary: OIDC provider configuration
+                oidc_proxy_mode:
+                  summary: OIDC provider (Proxy Mode)
                   value:
                     auth_provider: "oidc"
+                    mode: "proxy"
+                    proxy:
+                      enabled: true
+                      elasticsearch_url: "https://elasticsearch:9200"
+                      timeout: "30s"
+                      max_idle_conns: 100
+                      idle_conn_timeout: "90s"
+                      tls:
+                        enabled: true
+                        insecure_skip_verify: false
                     cache:
                       type: "memory"
                       expiration: "30m"
@@ -258,8 +591,19 @@ components:
       properties:
         status:
           type: string
+          enum: ["OK", "ERROR"]
           example: "OK"
           description: Health status of the service
+        mode:
+          type: string
+          enum: ["auth-only", "proxy"]
+          example: "auth-only"
+          description: Current operating mode
+        elasticsearch_status:
+          type: string
+          enum: ["connected", "unreachable", "not_applicable"]
+          example: "connected"
+          description: Elasticsearch connectivity status (proxy mode only)
       required:
         - status
 
@@ -271,6 +615,46 @@ components:
           enum: ["authelia", "oidc"]
           example: "authelia"
           description: Currently active authentication provider
+        mode:
+          type: string
+          enum: ["auth-only", "proxy"]
+          example: "auth-only"
+          description: Current operating mode
+        proxy:
+          type: object
+          description: Proxy mode configuration (only present when proxy mode is enabled)
+          properties:
+            enabled:
+              type: boolean
+              example: true
+              description: Whether proxy mode is enabled
+            elasticsearch_url:
+              type: string
+              example: "https://elasticsearch:9200"
+              description: Target Elasticsearch cluster URL
+            timeout:
+              type: string
+              example: "30s"
+              description: Request timeout duration
+            max_idle_conns:
+              type: integer
+              example: 100
+              description: Maximum idle connections in pool
+            idle_conn_timeout:
+              type: string
+              example: "90s"
+              description: Idle connection timeout duration
+            tls:
+              type: object
+              description: TLS configuration for Elasticsearch connections
+              properties:
+                enabled:
+                  type: boolean
+                  example: true
+                insecure_skip_verify:
+                  type: boolean
+                  example: false
+                  description: Skip TLS certificate verification (development only)
         cache:
           type: object
           description: Cache configuration (sensitive values masked)
@@ -319,6 +703,7 @@ components:
             - $ref: '#/components/schemas/OIDCProviderConfig'
       required:
         - auth_provider
+        - mode
         - cache
         - default_roles
         - group_mappings
@@ -397,6 +782,38 @@ components:
         - code
         - timestamp
 
+    ProxyErrorResponse:
+      type: object
+      properties:
+        message:
+          type: string
+          example: "Failed to connect to Elasticsearch"
+          description: Human-readable error message
+        code:
+          type: integer
+          example: 502
+          description: HTTP status code
+        request_id:
+          type: string
+          example: "req-123456"
+          description: Unique request identifier for tracing
+        timestamp:
+          type: string
+          format: date-time
+          example: "2024-01-15T10:30:00Z"
+          description: ISO 8601 timestamp when the error occurred
+        mode:
+          type: string
+          enum: ["auth-only", "proxy"]
+          example: "proxy"
+          description: Operating mode when error occurred
+      required:
+        - message
+        - code
+        - request_id
+        - timestamp
+        - mode
+
   examples:
     AutheliaHeaders:
       summary: Authelia authentication headers
@@ -412,8 +829,10 @@ components:
 
 tags:
   - name: Authentication
-    description: Authentication and authorization operations
+    description: Authentication and authorization operations (Auth-Only Mode)
+  - name: Proxy
+    description: Transparent proxy operations (Proxy Mode)
   - name: Health
-    description: Service health and monitoring
+    description: Service health and monitoring endpoints
   - name: Configuration
     description: Service configuration information

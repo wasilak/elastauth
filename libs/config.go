@@ -23,6 +23,25 @@ var tracerConfig = otel.Tracer("config")
 
 var LogLeveler *slog.LevelVar
 
+// ProxyConfig holds configuration for transparent proxy mode
+type ProxyConfig struct {
+	Enabled          bool          `mapstructure:"enabled"`
+	ElasticsearchURL string        `mapstructure:"elasticsearch_url"`
+	Timeout          time.Duration `mapstructure:"timeout"`
+	MaxIdleConns     int           `mapstructure:"max_idle_conns"`
+	IdleConnTimeout  time.Duration `mapstructure:"idle_conn_timeout"`
+	TLS              TLSConfig     `mapstructure:"tls"`
+}
+
+// TLSConfig holds TLS configuration for Elasticsearch connections
+type TLSConfig struct {
+	Enabled            bool   `mapstructure:"enabled"`
+	InsecureSkipVerify bool   `mapstructure:"insecure_skip_verify"`
+	CACert             string `mapstructure:"ca_cert"`
+	ClientCert         string `mapstructure:"client_cert"`
+	ClientKey          string `mapstructure:"client_key"`
+}
+
 // InitConfiguration initializes the application configuration with proper precedence:
 // 1. Environment variables (highest precedence) - prefixed with ELASTAUTH_
 // 2. Configuration file values (middle precedence) - config.yml
@@ -124,6 +143,18 @@ func setConfigurationDefaults() {
 	viper.SetDefault("casdoor.organization", "built-in")
 	viper.SetDefault("casdoor.application", "app-built-in")
 
+	// Proxy configuration defaults
+	viper.SetDefault("proxy.enabled", false)
+	viper.SetDefault("proxy.elasticsearch_url", "")
+	viper.SetDefault("proxy.timeout", "30s")
+	viper.SetDefault("proxy.max_idle_conns", 100)
+	viper.SetDefault("proxy.idle_conn_timeout", "90s")
+	viper.SetDefault("proxy.tls.enabled", false)
+	viper.SetDefault("proxy.tls.insecure_skip_verify", false)
+	viper.SetDefault("proxy.tls.ca_cert", "")
+	viper.SetDefault("proxy.tls.client_cert", "")
+	viper.SetDefault("proxy.tls.client_key", "")
+
 	viper.SetDefault("enable_metrics", false)
 	viper.SetDefault("enableOtel", false)
 	viper.SetDefault("log_level", "info")
@@ -197,6 +228,18 @@ func bindProviderEnvironmentVariables() {
 	viper.BindEnv("casdoor.client_secret", "ELASTAUTH_CASDOOR_CLIENT_SECRET")
 	viper.BindEnv("casdoor.organization", "ELASTAUTH_CASDOOR_ORGANIZATION")
 	viper.BindEnv("casdoor.application", "ELASTAUTH_CASDOOR_APPLICATION")
+	
+	// Proxy configuration
+	viper.BindEnv("proxy.enabled", "ELASTAUTH_PROXY_ENABLED")
+	viper.BindEnv("proxy.elasticsearch_url", "ELASTAUTH_PROXY_ELASTICSEARCH_URL")
+	viper.BindEnv("proxy.timeout", "ELASTAUTH_PROXY_TIMEOUT")
+	viper.BindEnv("proxy.max_idle_conns", "ELASTAUTH_PROXY_MAX_IDLE_CONNS")
+	viper.BindEnv("proxy.idle_conn_timeout", "ELASTAUTH_PROXY_IDLE_CONN_TIMEOUT")
+	viper.BindEnv("proxy.tls.enabled", "ELASTAUTH_PROXY_TLS_ENABLED")
+	viper.BindEnv("proxy.tls.insecure_skip_verify", "ELASTAUTH_PROXY_TLS_INSECURE_SKIP_VERIFY")
+	viper.BindEnv("proxy.tls.ca_cert", "ELASTAUTH_PROXY_TLS_CA_CERT")
+	viper.BindEnv("proxy.tls.client_cert", "ELASTAUTH_PROXY_TLS_CLIENT_CERT")
+	viper.BindEnv("proxy.tls.client_key", "ELASTAUTH_PROXY_TLS_CLIENT_KEY")
 	
 	// Logging and metrics
 	viper.BindEnv("log_level", "ELASTAUTH_LOG_LEVEL")
@@ -311,6 +354,18 @@ func GetSupportedEnvironmentVariables() []string {
 		"ELASTAUTH_CASDOOR_ORGANIZATION",
 		"ELASTAUTH_CASDOOR_APPLICATION",
 		
+		// Proxy configuration
+		"ELASTAUTH_PROXY_ENABLED",
+		"ELASTAUTH_PROXY_ELASTICSEARCH_URL",
+		"ELASTAUTH_PROXY_TIMEOUT",
+		"ELASTAUTH_PROXY_MAX_IDLE_CONNS",
+		"ELASTAUTH_PROXY_IDLE_CONN_TIMEOUT",
+		"ELASTAUTH_PROXY_TLS_ENABLED",
+		"ELASTAUTH_PROXY_TLS_INSECURE_SKIP_VERIFY",
+		"ELASTAUTH_PROXY_TLS_CA_CERT",
+		"ELASTAUTH_PROXY_TLS_CLIENT_CERT",
+		"ELASTAUTH_PROXY_TLS_CLIENT_KEY",
+		
 		// Logging and metrics
 		"ELASTAUTH_LOG_LEVEL",
 		"ELASTAUTH_LOG_FORMAT",
@@ -414,6 +469,11 @@ func ValidateConfiguration(ctx context.Context) error {
 
 	// Validate Elasticsearch configuration
 	if err := ValidateElasticsearchConfiguration(); err != nil {
+		return err
+	}
+
+	// Validate proxy configuration
+	if err := ValidateProxyConfiguration(); err != nil {
 		return err
 	}
 
@@ -985,4 +1045,102 @@ func ValidateElasticsearchConfiguration() error {
 	}
 
 	return nil
+}
+
+// ValidateProxyConfiguration validates proxy mode configuration
+func ValidateProxyConfiguration() error {
+	if !viper.GetBool("proxy.enabled") {
+		// Proxy mode is disabled, no validation needed
+		return nil
+	}
+
+	// Validate Elasticsearch URL is provided
+	elasticsearchURL := viper.GetString("proxy.elasticsearch_url")
+	if elasticsearchURL == "" {
+		return fmt.Errorf("proxy.elasticsearch_url is required when proxy mode is enabled")
+	}
+
+	// Validate URL format
+	if !strings.HasPrefix(elasticsearchURL, "http://") && !strings.HasPrefix(elasticsearchURL, "https://") {
+		return fmt.Errorf("proxy.elasticsearch_url must start with http:// or https://, got: %s", elasticsearchURL)
+	}
+
+	// Validate timeout
+	timeoutStr := viper.GetString("proxy.timeout")
+	if _, err := time.ParseDuration(timeoutStr); err != nil {
+		return fmt.Errorf("invalid proxy.timeout value '%s': %w", timeoutStr, err)
+	}
+
+	// Validate idle connection timeout
+	idleTimeoutStr := viper.GetString("proxy.idle_conn_timeout")
+	if _, err := time.ParseDuration(idleTimeoutStr); err != nil {
+		return fmt.Errorf("invalid proxy.idle_conn_timeout value '%s': %w", idleTimeoutStr, err)
+	}
+
+	// Validate max idle connections
+	maxIdleConns := viper.GetInt("proxy.max_idle_conns")
+	if maxIdleConns < 1 {
+		return fmt.Errorf("proxy.max_idle_conns must be at least 1, got: %d", maxIdleConns)
+	}
+
+	// Validate TLS configuration if enabled
+	if viper.GetBool("proxy.tls.enabled") {
+		caCert := viper.GetString("proxy.tls.ca_cert")
+		clientCert := viper.GetString("proxy.tls.client_cert")
+		clientKey := viper.GetString("proxy.tls.client_key")
+
+		// If client cert is provided, client key must also be provided
+		if clientCert != "" && clientKey == "" {
+			return fmt.Errorf("proxy.tls.client_key is required when proxy.tls.client_cert is provided")
+		}
+
+		// If client key is provided, client cert must also be provided
+		if clientKey != "" && clientCert == "" {
+			return fmt.Errorf("proxy.tls.client_cert is required when proxy.tls.client_key is provided")
+		}
+
+		// Validate that certificate files exist if provided
+		if caCert != "" {
+			if _, err := os.Stat(caCert); os.IsNotExist(err) {
+				return fmt.Errorf("proxy.tls.ca_cert file does not exist: %s", caCert)
+			}
+		}
+
+		if clientCert != "" {
+			if _, err := os.Stat(clientCert); os.IsNotExist(err) {
+				return fmt.Errorf("proxy.tls.client_cert file does not exist: %s", clientCert)
+			}
+		}
+
+		if clientKey != "" {
+			if _, err := os.Stat(clientKey); os.IsNotExist(err) {
+				return fmt.Errorf("proxy.tls.client_key file does not exist: %s", clientKey)
+			}
+		}
+	}
+
+	return nil
+}
+
+// GetEffectiveProxyConfig returns the effective proxy configuration
+func GetEffectiveProxyConfig() map[string]interface{} {
+	config := make(map[string]interface{})
+	
+	config["enabled"] = viper.GetBool("proxy.enabled")
+	config["elasticsearch_url"] = viper.GetString("proxy.elasticsearch_url")
+	config["timeout"] = viper.GetString("proxy.timeout")
+	config["max_idle_conns"] = viper.GetInt("proxy.max_idle_conns")
+	config["idle_conn_timeout"] = viper.GetString("proxy.idle_conn_timeout")
+	
+	// TLS configuration
+	tlsConfig := make(map[string]interface{})
+	tlsConfig["enabled"] = viper.GetBool("proxy.tls.enabled")
+	tlsConfig["insecure_skip_verify"] = viper.GetBool("proxy.tls.insecure_skip_verify")
+	tlsConfig["ca_cert"] = viper.GetString("proxy.tls.ca_cert")
+	tlsConfig["client_cert"] = viper.GetString("proxy.tls.client_cert")
+	tlsConfig["client_key"] = viper.GetString("proxy.tls.client_key")
+	
+	config["tls"] = tlsConfig
+	
+	return config
 }

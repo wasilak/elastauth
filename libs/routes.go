@@ -141,6 +141,7 @@ type configResponse struct {
 	AuthProvider    string                 `json:"auth_provider"`
 	Cache           map[string]interface{} `json:"cache"`
 	Elasticsearch   map[string]interface{} `json:"elasticsearch"`
+	Proxy           map[string]interface{} `json:"proxy"`
 	DefaultRoles    []string               `json:"default_roles"`
 	GroupMappings   map[string][]string    `json:"group_mappings"`
 	ProviderConfig  map[string]interface{} `json:"provider_config"`
@@ -584,6 +585,15 @@ func ConfigRoute(c echo.Context) error {
 		"dry_run":  GetElasticsearchDryRun(),
 	}
 
+	// Get proxy configuration with masked sensitive values
+	proxyConfig := GetEffectiveProxyConfig()
+	if tlsConfig, ok := proxyConfig["tls"].(map[string]interface{}); ok {
+		// Mask TLS certificate paths for security
+		if tlsConfig["client_key"] != "" {
+			tlsConfig["client_key"] = "***"
+		}
+	}
+
 	// Get provider-specific configuration
 	var providerConfig map[string]interface{}
 	switch authProvider {
@@ -610,6 +620,7 @@ func ConfigRoute(c echo.Context) error {
 		AuthProvider:   authProvider,
 		Cache:          maskedCacheConfig,
 		Elasticsearch:  elasticsearchConfig,
+		Proxy:          proxyConfig,
 		DefaultRoles:   viper.GetStringSlice("default_roles"),
 		GroupMappings:  viper.GetStringMapStringSlice("group_mappings"),
 		ProviderConfig: providerConfig,

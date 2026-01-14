@@ -23,8 +23,8 @@ authentication_backend:
 session:
   secret: "4C7NzehAp798AWGIN481t7AImVuG4i1kpMZ7nUSk28o="
   cookies:
-    - domain: "127.0.0.1"
-      authelia_url: "http://127.0.0.1:9091"
+    - domain: "example.local"
+      authelia_url: "https://authelia.example.local:9091"
   redis:
     host: "redis"
     port: 6379

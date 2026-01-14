@@ -12,14 +12,13 @@ volumes:
 
 services:
   elasticsearch:
-    image: docker.elastic.co/elasticsearch/elasticsearch:9.1.0
+    image: docker.elastic.co/elasticsearch/elasticsearch:9.2.4
     container_name: elasticsearch-demo
     environment:
       - node.name=es-demo-node
       - cluster.name=elastauth-demo
       - discovery.type=single-node
       - bootstrap.memory_lock=true
-      - "ES_JAVA_OPTS=-Xms2g -Xmx2g"
       - xpack.security.enabled=true
       - xpack.security.http.ssl.enabled=true
       - xpack.security.http.ssl.key=/usr/share/elasticsearch/config/certs/elasticsearch.key
@@ -30,6 +29,7 @@ services:
       - xpack.security.transport.ssl.certificate=/usr/share/elasticsearch/config/certs/elasticsearch.crt
       - xpack.security.transport.ssl.certificate_authorities=/usr/share/elasticsearch/config/certs/ca.crt
       - ELASTIC_PASSWORD=demo-password-change-me
+    mem_limit: 2GB
     ulimits:
       memlock:
         soft: -1
@@ -95,7 +95,7 @@ services:
       dockerfile: Dockerfile
     container_name: elastauth-demo
     volumes:
-      - ./configs/elastauth/config.yml:/app/config.yml:ro
+      - ./configs/elastauth:/config:ro
       - ./certs:/certs:ro
     ports:
       - "3000:3000"
@@ -103,6 +103,7 @@ services:
       - elastauth-demo
     environment:
       - TZ=UTC
+      - ELASTAUTH_CONFIG=/config
     depends_on:
       redis:
         condition: service_healthy

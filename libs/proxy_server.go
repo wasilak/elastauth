@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
+	"strings"
 
 	"github.com/elazarl/goproxy"
 	"github.com/spf13/viper"
@@ -63,14 +64,18 @@ func InitProxyServer(config *ProxyConfig, authProvider provider.AuthProvider, ca
 		return handleCredentialInjection(r, ctx, config, cacheManager)
 	})
 
+	// Add response handler for logging and metrics
+	// This handler runs after the response is received from Elasticsearch
+	proxy.OnResponse().DoFunc(func(r *http.Response, ctx *goproxy.ProxyCtx) *http.Response {
+		return handleResponse(r, ctx)
+	})
+
 	slog.Info("Proxy server initialized",
 		"elasticsearch_url", config.ElasticsearchURL,
 		"timeout", config.Timeout,
 		"max_idle_conns", config.MaxIdleConns,
 		"tls_enabled", config.TLS.Enabled,
 	)
-
-	// TODO: Add response handler in task 5
 
 	return proxy, nil
 }
@@ -261,11 +266,139 @@ func handleCredentialInjection(r *http.Request, ctx *goproxy.ProxyCtx, config *P
 	return r, nil
 }
 
-// handleResponse processes responses for logging and metrics
-// This will be implemented in task 5
+// handleResponse processes responses for logging and metrics.
+// It logs response information, sanitizes sensitive headers, and collects metrics.
+// This handler runs after the response is received from Elasticsearch.
+//
+// Parameters:
+//   - r: The HTTP response from Elasticsearch
+//   - ctx: The goproxy context for this request
+//
+// Returns:
+//   - *http.Response: The response (potentially with sanitized headers)
 func handleResponse(r *http.Response, ctx *goproxy.ProxyCtx) *http.Response {
-	// Implementation will be added in task 5
+	// Handle nil response (shouldn't happen, but be defensive)
+	if r == nil {
+		slog.Error("Received nil response from Elasticsearch")
+		return r
+	}
+
+	// Get request context for logging
+	reqCtx := context.Background()
+	if ctx.Req != nil {
+		reqCtx = ctx.Req.Context()
+	}
+
+	// Extract user info from context if available
+	var username string
+	if userInfo, ok := ctx.UserData.(*provider.UserInfo); ok && userInfo != nil {
+		username = userInfo.Username
+	}
+
+	// Log response information
+	slog.InfoContext(reqCtx, "Proxy response",
+		slog.String("username", username),
+		slog.Int("status_code", r.StatusCode),
+		slog.String("status", r.Status),
+		slog.Int64("content_length", r.ContentLength),
+		slog.String("content_type", r.Header.Get("Content-Type")),
+	)
+
+	// Log detailed response info at debug level
+	if slog.Default().Enabled(reqCtx, slog.LevelDebug) {
+		// Sanitize headers before logging
+		sanitizedHeaders := sanitizeResponseHeaders(r.Header)
+		slog.DebugContext(reqCtx, "Proxy response details",
+			slog.String("username", username),
+			slog.Any("headers", sanitizedHeaders),
+			slog.String("protocol", r.Proto),
+		)
+	}
+
+	// Sanitize sensitive headers from the response
+	// This prevents credentials or tokens from being sent to the client
+	sanitizeResponseHeadersInPlace(r)
+
+	// TODO: Add metrics collection in task 11
+	// This will track request count, latency, error rate, etc.
+
 	return r
+}
+
+// sanitizeResponseHeaders creates a sanitized copy of response headers for logging.
+// It redacts sensitive header values to prevent credentials from appearing in logs.
+//
+// Parameters:
+//   - headers: The original HTTP headers
+//
+// Returns:
+//   - map[string]interface{}: Sanitized headers safe for logging
+func sanitizeResponseHeaders(headers http.Header) map[string]interface{} {
+	sanitized := make(map[string]interface{})
+	
+	// List of sensitive header names (case-insensitive)
+	sensitiveHeaders := []string{
+		"authorization",
+		"www-authenticate",
+		"proxy-authorization",
+		"proxy-authenticate",
+		"cookie",
+		"set-cookie",
+		"x-api-key",
+		"x-auth-token",
+	}
+
+	for key, values := range headers {
+		lowerKey := strings.ToLower(key)
+		isSensitive := false
+		
+		// Check if this is a sensitive header
+		for _, sensitiveHeader := range sensitiveHeaders {
+			if lowerKey == sensitiveHeader || strings.Contains(lowerKey, "token") || strings.Contains(lowerKey, "secret") {
+				isSensitive = true
+				break
+			}
+		}
+
+		if isSensitive {
+			sanitized[key] = "***REDACTED***"
+		} else {
+			// For non-sensitive headers, include the actual values
+			if len(values) == 1 {
+				sanitized[key] = values[0]
+			} else {
+				sanitized[key] = values
+			}
+		}
+	}
+
+	return sanitized
+}
+
+// sanitizeResponseHeadersInPlace removes or redacts sensitive headers from the response.
+// This modifies the response headers in place to prevent sensitive data from reaching the client.
+//
+// Parameters:
+//   - r: The HTTP response to sanitize
+func sanitizeResponseHeadersInPlace(r *http.Response) {
+	if r == nil || r.Header == nil {
+		return
+	}
+
+	// Remove sensitive headers that should not be forwarded to the client
+	// These are headers that might contain Elasticsearch credentials or internal information
+	headersToRemove := []string{
+		"WWW-Authenticate",      // Elasticsearch auth challenges
+		"Proxy-Authenticate",    // Proxy auth challenges
+		"X-Elastic-Product",     // Internal Elasticsearch header (optional, but good practice)
+	}
+
+	for _, header := range headersToRemove {
+		r.Header.Del(header)
+	}
+
+	// Note: We don't remove Authorization header here because it's a request header,
+	// not a response header. The client never sees the Authorization header we inject.
 }
 
 // UserCredentials holds Elasticsearch credentials for a user

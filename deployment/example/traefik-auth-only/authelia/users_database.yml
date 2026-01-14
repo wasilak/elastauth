@@ -1,0 +1,19 @@
+---
+# Users database for Authelia
+# Password is 'password' hashed with argon2id
+
+users:
+  john:
+    displayname: "John Doe"
+    password: "$argon2id$v=19$m=65536,t=3,p=4$BpLnfgDsc2WD8F2q$qQv8xuW8S0y5SWaw3yEqP+oFhFSL/je/atK0ydP9nio"
+    email: john.doe@authelia.com
+    groups:
+      - admins
+      - dev
+
+  jane:
+    displayname: "Jane Smith"
+    password: "$argon2id$v=19$m=65536,t=3,p=4$BpLnfgDsc2WD8F2q$qQv8xuW8S0y5SWaw3yEqP+oFhFSL/je/atK0ydP9nio"
+    email: jane.smith@authelia.com
+    groups:
+      - dev

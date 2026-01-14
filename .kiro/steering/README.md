@@ -11,6 +11,7 @@ This directory contains steering rules that guide development of this project.
 5. **04-phase-gate-discipline.md** - Incremental development discipline (always)
 6. **05-context7-research-tools.md** - Context7 MCP tools for research and development (always)
 7. **06-starlight-documentation.md** - Starlight documentation best practices (always)
+8. **07-docker-compose-modern-syntax.md** - Docker Compose V2 modern syntax (always)
 
 ## Rule Priority
 
@@ -25,6 +26,7 @@ All rules marked `inclusion: always` are active for every conversation.
 - **Simple First**: Avoid premature optimization and abstraction
 - **Research-Driven**: Use Context7 MCP tools for current best practices
 - **Starlight Documentation**: Use proper .mdx format with components and Mermaid diagrams
+- **Modern Docker**: Use `docker compose` (V2) not `docker-compose` (V1)
 
 ## For AI Assistants
 
@@ -36,6 +38,7 @@ Read these rules at the start of each conversation to understand:
 - Phase gate discipline to maintain
 - When and how to use Context7 research tools
 - How to create proper Starlight documentation with components and Mermaid diagrams
+- Modern Docker Compose V2 syntax
 
 ## For Developers
 
@@ -47,3 +50,4 @@ These rules ensure:
 - Maintainable, idiomatic Go code
 - Current best practices through research
 - Professional Starlight documentation with proper components
+- Modern Docker Compose V2 syntax in all examples

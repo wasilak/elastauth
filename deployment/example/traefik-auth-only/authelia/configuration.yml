@@ -1,0 +1,48 @@
+---
+# Authelia configuration for Traefik integration example
+
+server:
+  host: 0.0.0.0
+  port: 9091
+
+log:
+  level: debug
+
+theme: light
+
+jwt_secret: a_very_important_secret_change_in_production
+
+default_redirection_url: http://auth.localhost
+
+totp:
+  issuer: authelia.com
+
+authentication_backend:
+  file:
+    path: /config/users_database.yml
+
+access_control:
+  default_policy: deny
+  rules:
+    - domain: es.localhost
+      policy: one_factor
+
+session:
+  name: authelia_session
+  secret: unsecure_session_secret_change_in_production
+  expiration: 3600
+  inactivity: 300
+  domain: localhost
+
+regulation:
+  max_retries: 3
+  find_time: 120
+  ban_time: 300
+
+storage:
+  local:
+    path: /config/db.sqlite3
+
+notifier:
+  filesystem:
+    filename: /config/notification.txt

@@ -1,0 +1,25 @@
+http:
+  middlewares:
+    # Authelia forward auth middleware
+    authelia-forward-auth:
+      forwardAuth:
+        address: "http://authelia:9091/api/verify?rd=http://auth.localhost"
+        trustForwardHeader: true
+        authResponseHeaders:
+          - "Remote-User"
+          - "Remote-Groups"
+          - "Remote-Name"
+          - "Remote-Email"
+
+    # elastauth forward auth middleware
+    elastauth-forward-auth:
+      forwardAuth:
+        address: "http://elastauth:5000/"
+        trustForwardHeader: true
+        authResponseHeaders:
+          - "Authorization"
+        authResponseHeadersRegex: "^X-"
+
+  # Optional: Define routers and services here if not using Docker labels
+  routers: {}
+  services: {}

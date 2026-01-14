@@ -1,0 +1,108 @@
+version: '3.8'
+
+services:
+  # Traefik reverse proxy with forward auth
+  traefik:
+    image: traefik:v3.0
+    container_name: traefik
+    command:
+      - "--api.insecure=true"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--providers.file.filename=/etc/traefik/dynamic-config.yml"
+      - "--entrypoints.web.address=:80"
+      - "--log.level=DEBUG"
+    ports:
+      - "80:80"
+      - "8080:8080"  # Traefik dashboard
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./dynamic-config.yml:/etc/traefik/dynamic-config.yml:ro
+    networks:
+      - auth-network
+
+  # Authelia authentication provider
+  authelia:
+    image: authelia/authelia:latest
+    container_name: authelia
+    volumes:
+      - ./authelia:/config
+    environment:
+      - TZ=UTC
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.authelia.rule=Host(`auth.localhost`)"
+      - "traefik.http.routers.authelia.entrypoints=web"
+      - "traefik.http.services.authelia.loadbalancer.server.port=9091"
+    networks:
+      - auth-network
+    depends_on:
+      - redis
+
+  # elastauth in auth-only mode
+  elastauth:
+    image: ghcr.io/wasilak/elastauth:latest
+    container_name: elastauth
+    environment:
+      - ELASTAUTH_AUTH_PROVIDER=authelia
+      - ELASTAUTH_ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+      - ELASTAUTH_ELASTICSEARCH_USERNAME=elastic
+      - ELASTAUTH_ELASTICSEARCH_PASSWORD=changeme
+      - ELASTAUTH_CACHE_TYPE=redis
+      - ELASTAUTH_CACHE_REDIS_HOST=redis:6379
+      - ELASTAUTH_CACHE_REDIS_DB=0
+      - ELASTAUTH_CACHE_EXPIRATION=1h
+      - ELASTAUTH_SECRET_KEY=your-secret-key-change-this-in-production
+      - ELASTAUTH_PROXY_ENABLED=false  # Auth-only mode
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.elastauth.rule=Host(`elastauth.localhost`)"
+      - "traefik.http.routers.elastauth.entrypoints=web"
+      - "traefik.http.services.elastauth.loadbalancer.server.port=5000"
+    networks:
+      - auth-network
+    depends_on:
+      - elasticsearch
+      - redis
+      - authelia
+
+  # Elasticsearch as the protected backend
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.11.0
+    container_name: elasticsearch
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=true
+      - xpack.security.http.ssl.enabled=false
+      - ELASTIC_PASSWORD=changeme
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.elasticsearch.rule=Host(`es.localhost`)"
+      - "traefik.http.routers.elasticsearch.entrypoints=web"
+      # Forward auth middleware chain
+      - "traefik.http.routers.elasticsearch.middlewares=authelia-forward-auth,elastauth-forward-auth"
+      - "traefik.http.services.elasticsearch.loadbalancer.server.port=9200"
+    networks:
+      - auth-network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # Redis for caching
+  redis:
+    image: redis:7-alpine
+    container_name: redis
+    networks:
+      - auth-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+networks:
+  auth-network:
+    driver: bridge

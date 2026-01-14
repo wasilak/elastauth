@@ -323,3 +323,86 @@ init: ## Bootstrap the demo environment (generate certs and configs)
 # Force initialization - regenerate all certificates and configs
 init-force: ## Force regenerate all certificates and configs
 	@$(MAKE) FORCE=1 init
+
+# Start all services in detached mode
+up: ## Start all services in detached mode
+	@echo "$(BLUE)========================================$(NC)"
+	@echo "$(BLUE)Starting elastauth Demo Services$(NC)"
+	@echo "$(BLUE)========================================$(NC)"
+	@echo ""
+	@echo "$(GREEN)Starting services with docker-compose...$(NC)"
+	@docker-compose up -d
+	@echo ""
+	@echo "$(GREEN)========================================$(NC)"
+	@echo "$(GREEN)✓ Services Started!$(NC)"
+	@echo "$(GREEN)========================================$(NC)"
+	@echo ""
+	@echo "$(YELLOW)Services are starting in the background...$(NC)"
+	@echo "  - Elasticsearch: http://localhost:9200"
+	@echo "  - Authelia: http://localhost:9091"
+	@echo "  - elastauth: http://localhost:3000"
+	@echo "  - Redis: localhost:6379"
+	@echo ""
+	@echo "$(YELLOW)Next steps:$(NC)"
+	@echo "  1. Wait for services to become healthy (30-60 seconds)"
+	@echo "  2. Check service status: $(BLUE)make ps$(NC)"
+	@echo "  3. View logs: $(BLUE)make logs$(NC)"
+	@echo "  4. Run health checks: $(BLUE)make test$(NC)"
+	@echo ""
+
+# Stop and remove all containers
+down: ## Stop and remove all containers
+	@echo "$(BLUE)========================================$(NC)"
+	@echo "$(BLUE)Stopping elastauth Demo Services$(NC)"
+	@echo "$(BLUE)========================================$(NC)"
+	@echo ""
+	@echo "$(YELLOW)Stopping and removing containers...$(NC)"
+	@docker-compose down
+	@echo ""
+	@echo "$(GREEN)✓ Services stopped and containers removed$(NC)"
+	@echo ""
+
+# Restart all services
+restart: ## Restart all services
+	@echo "$(BLUE)========================================$(NC)"
+	@echo "$(BLUE)Restarting elastauth Demo Services$(NC)"
+	@echo "$(BLUE)========================================$(NC)"
+	@echo ""
+	@$(MAKE) down
+	@echo ""
+	@$(MAKE) up
+
+# Display logs from all services (or specific service if SERVICE is set)
+logs: ## Display logs from all services with timestamps
+	@if [ -n "$(SERVICE)" ]; then \
+		echo "$(BLUE)Displaying logs for service: $(SERVICE)$(NC)"; \
+		docker-compose logs --timestamps $(SERVICE); \
+	else \
+		echo "$(BLUE)Displaying logs from all services$(NC)"; \
+		docker-compose logs --timestamps; \
+	fi
+	@echo ""
+	@echo "$(YELLOW)Tip: Use 'make logs SERVICE=<service-name>' to view specific service logs$(NC)"
+	@echo "$(YELLOW)Tip: Use 'make logs-follow' to follow logs in real-time$(NC)"
+
+# Follow logs in real-time
+logs-follow: ## Follow logs in real-time
+	@if [ -n "$(SERVICE)" ]; then \
+		echo "$(BLUE)Following logs for service: $(SERVICE)$(NC)"; \
+		docker-compose logs --timestamps --follow $(SERVICE); \
+	else \
+		echo "$(BLUE)Following logs from all services$(NC)"; \
+		docker-compose logs --timestamps --follow; \
+	fi
+
+# Show running containers
+ps: ## Show running containers
+	@echo "$(BLUE)========================================$(NC)"
+	@echo "$(BLUE)elastauth Demo Services Status$(NC)"
+	@echo "$(BLUE)========================================$(NC)"
+	@echo ""
+	@docker-compose ps
+	@echo ""
+
+# Alias for ps target
+status: ps ## Display formatted service status (alias for ps)

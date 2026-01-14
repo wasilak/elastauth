@@ -12,6 +12,7 @@ This directory contains steering rules that guide development of this project.
 6. **05-context7-research-tools.md** - Context7 MCP tools for research and development (always)
 7. **06-starlight-documentation.md** - Starlight documentation best practices (always)
 8. **07-docker-compose-modern-syntax.md** - Docker Compose V2 modern syntax (always)
+9. **08-deployment-examples-documentation.md** - Minimal example READMEs with Starlight docs (always)
 
 ## Rule Priority
 
@@ -27,6 +28,7 @@ All rules marked `inclusion: always` are active for every conversation.
 - **Research-Driven**: Use Context7 MCP tools for current best practices
 - **Starlight Documentation**: Use proper .mdx format with components and Mermaid diagrams
 - **Modern Docker**: Use `docker compose` (V2) not `docker-compose` (V1)
+- **Minimal Examples**: Deployment example READMEs are minimal, Starlight docs are comprehensive
 
 ## For AI Assistants
 
@@ -39,6 +41,7 @@ Read these rules at the start of each conversation to understand:
 - When and how to use Context7 research tools
 - How to create proper Starlight documentation with components and Mermaid diagrams
 - Modern Docker Compose V2 syntax
+- How to structure deployment examples with minimal READMEs
 
 ## For Developers
 
@@ -51,3 +54,4 @@ These rules ensure:
 - Current best practices through research
 - Professional Starlight documentation with proper components
 - Modern Docker Compose V2 syntax in all examples
+- Single source of truth with minimal example READMEs

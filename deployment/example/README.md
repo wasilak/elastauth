@@ -276,6 +276,54 @@ curl -H "Remote-User: admin" \
 2. Check elastauth logs: `make logs SERVICE=elastauth`
 3. Verify authentication headers are being sent correctly
 4. Ensure Redis is running: `docker exec redis-demo redis-cli ping`
+5. Check Elasticsearch TLS configuration (see TLS Certificate Issues below)
+
+### TLS Certificate Issues
+
+**Problem**: Elasticsearch TLS certificate verification failures
+
+**Current Limitation**: The elastauth application currently does not fully implement the `skip_verify` TLS configuration option. This causes certificate verification failures with self-signed certificates in the demo environment.
+
+**Symptoms**:
+- Error in logs: `tls: failed to verify certificate: x509: certificate signed by unknown authority`
+- 500 Internal Server Error when accessing elastauth endpoints
+
+**Workaround Options**:
+
+1. **Use HTTP instead of HTTPS for Elasticsearch** (Demo only - not for production):
+   - Edit `configs/elastauth/config.yml`:
+     ```yaml
+     elasticsearch_host: "http://elasticsearch:9200"  # Change https to http
+     ```
+   - Edit `docker-compose.yml` Elasticsearch service:
+     ```yaml
+     # Comment out or remove xpack.security.http.ssl settings
+     # - xpack.security.http.ssl.enabled=true
+     # - xpack.security.http.ssl.key=...
+     # - xpack.security.http.ssl.certificate=...
+     ```
+   - Restart services: `make restart`
+
+2. **Wait for code fix**: The elastauth application needs to be updated to properly handle the `elasticsearch.tls.skip_verify` configuration option by creating an HTTP client with custom TLS configuration.
+
+**Note**: This is a known limitation of the current elastauth implementation and is tracked for future enhancement.
+
+### Elasticsearch Proxy Routes Not Found (404)
+
+**Problem**: Requests to Elasticsearch endpoints through elastauth return 404 Not Found
+
+**Symptoms**:
+- `curl -H "Remote-User: admin" http://localhost:3000/_cluster/health` returns `{"message":"Not Found"}`
+- elastauth logs show: `WARN Not Found ... request.path=/_cluster/health ... request.route=""`
+
+**Explanation**: The elastauth application uses a catch-all proxy route that forwards requests to Elasticsearch. The route should match all paths except specific elastauth endpoints like `/health`. If you're seeing 404 errors, it indicates the proxy route is not being registered or matched correctly.
+
+**Solutions**:
+1. Verify elastauth is running: `docker compose ps elastauth`
+2. Check elastauth logs for startup errors: `make logs SERVICE=elastauth`
+3. Ensure the root endpoint works first: `curl -H "Remote-User: admin" http://localhost:3000/`
+4. If root endpoint returns 500 error, fix TLS issues first (see above)
+5. Check that authentication headers are being sent with all requests
 
 ### Configuration Issues
 

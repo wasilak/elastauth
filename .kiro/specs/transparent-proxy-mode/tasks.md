@@ -195,7 +195,7 @@ This implementation plan transforms elastauth into a dual-mode authentication pr
   - Update `docs/src/content/docs/index.mdx` with mode selection guide
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 8.1, 8.2, 8.3, 8.4, 8.5_
 
-- [ ] 15. Create Traefik integration example (auth-only mode)
+- [x] 15. Create Traefik integration example (auth-only mode)
   - Create `deployment/example/traefik-auth-only/`
   - Create `deployment/example/traefik-auth-only/docker-compose.yml`
     - Include Traefik with forward auth middleware
@@ -210,7 +210,7 @@ This implementation plan transforms elastauth into a dual-mode authentication pr
     - Document the request flow
   - _Requirements: 8.1, 8.2, 8.3, 8.4, 8.5_
 
-- [ ] 16. Create direct proxy mode example
+- [x] 16. Create direct proxy mode example
   - Create `deployment/example/direct-proxy/`
   - Create `deployment/example/direct-proxy/docker-compose.yml`
     - Include elastauth in proxy mode

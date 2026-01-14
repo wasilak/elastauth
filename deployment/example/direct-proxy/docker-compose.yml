@@ -1,0 +1,98 @@
+version: '3.8'
+
+services:
+  # elastauth in transparent proxy mode
+  elastauth:
+    image: ghcr.io/wasilak/elastauth:latest
+    container_name: elastauth
+    environment:
+      # Proxy mode configuration
+      - ELASTAUTH_PROXY_ENABLED=true
+      - ELASTAUTH_PROXY_ELASTICSEARCH_URL=http://elasticsearch:9200
+      - ELASTAUTH_PROXY_TIMEOUT=30s
+      - ELASTAUTH_PROXY_MAX_IDLE_CONNS=100
+      - ELASTAUTH_PROXY_IDLE_CONN_TIMEOUT=90s
+      # Authentication provider
+      - ELASTAUTH_AUTH_PROVIDER=authelia
+      # Elasticsearch admin credentials (for user management)
+      - ELASTAUTH_ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+      - ELASTAUTH_ELASTICSEARCH_USERNAME=elastic
+      - ELASTAUTH_ELASTICSEARCH_PASSWORD=changeme
+      # Cache configuration
+      - ELASTAUTH_CACHE_TYPE=redis
+      - ELASTAUTH_CACHE_REDIS_HOST=redis:6379
+      - ELASTAUTH_CACHE_REDIS_DB=0
+      - ELASTAUTH_CACHE_EXPIRATION=1h
+      # Security
+      - ELASTAUTH_SECRET_KEY=your-secret-key-change-this-in-production
+      # Server configuration
+      - ELASTAUTH_LISTEN=0.0.0.0:8080
+    ports:
+      - "8080:8080"  # elastauth proxy endpoint
+    volumes:
+      - ./config.yml:/config/config.yml:ro
+    networks:
+      - proxy-network
+    depends_on:
+      - elasticsearch
+      - redis
+      - authelia
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Authelia authentication provider
+  authelia:
+    image: authelia/authelia:latest
+    container_name: authelia
+    volumes:
+      - ./authelia:/config
+    environment:
+      - TZ=UTC
+    ports:
+      - "9091:9091"  # Authelia API
+    networks:
+      - proxy-network
+    depends_on:
+      - redis
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:9091/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Elasticsearch as the backend
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.11.0
+    container_name: elasticsearch
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=true
+      - xpack.security.http.ssl.enabled=false
+      - ELASTIC_PASSWORD=changeme
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+    networks:
+      - proxy-network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # Redis for caching
+  redis:
+    image: redis:7-alpine
+    container_name: redis
+    networks:
+      - proxy-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+networks:
+  proxy-network:
+    driver: bridge

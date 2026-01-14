@@ -1,0 +1,20 @@
+---
+# Authelia users database for testing
+# Password for all users: password
+# Generated with: docker run authelia/authelia:latest authelia crypto hash generate argon2 --password 'password'
+
+users:
+  john:
+    displayname: "John Doe"
+    password: "$argon2id$v=19$m=65536,t=3,p=4$BpLnH2c65iaiCuWQelaYLg$BqWh9OmVdBtLCJKTKqBp4vWRy9hkPgIJJJL+V+6+0qE"
+    email: john.doe@authelia.com
+    groups:
+      - admins
+      - dev
+
+  jane:
+    displayname: "Jane Smith"
+    password: "$argon2id$v=19$m=65536,t=3,p=4$BpLnH2c65iaiCuWQelaYLg$BqWh9OmVdBtLCJKTKqBp4vWRy9hkPgIJJJL+V+6+0qE"
+    email: jane.smith@authelia.com
+    groups:
+      - dev

@@ -1,0 +1,3 @@
+# Authelia runtime files
+db.sqlite3
+notification.txt

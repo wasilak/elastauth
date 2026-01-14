@@ -1,0 +1,82 @@
+# elastauth Configuration - Direct Proxy Mode Example
+#
+# This configuration demonstrates elastauth in transparent proxy mode,
+# where elastauth acts as a complete authentication proxy to Elasticsearch.
+
+# ============================================================================
+# Operating Mode: Transparent Proxy
+# ============================================================================
+
+proxy:
+  enabled: true  # Enable transparent proxy mode
+  elasticsearch_url: "http://elasticsearch:9200"
+  timeout: "30s"
+  max_idle_conns: 100
+  idle_conn_timeout: "90s"
+  
+  # TLS disabled for this example (Elasticsearch uses HTTP)
+  tls:
+    enabled: false
+
+# ============================================================================
+# Authentication Provider: Authelia
+# ============================================================================
+
+auth_provider: "authelia"
+
+authelia:
+  header_username: "Remote-User"
+  header_groups: "Remote-Groups"
+  header_email: "Remote-Email"
+  header_name: "Remote-Name"
+
+# ============================================================================
+# Elasticsearch Configuration
+# ============================================================================
+
+elasticsearch:
+  hosts:
+    - "http://elasticsearch:9200"
+  username: "elastic"
+  password: "changeme"
+  dry_run: false
+
+# ============================================================================
+# Cache Configuration
+# ============================================================================
+
+cache:
+  type: "redis"
+  expiration: "1h"
+  redis_host: "redis:6379"
+  redis_db: 0
+
+# ============================================================================
+# Security Configuration
+# ============================================================================
+
+secret_key: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+
+default_roles:
+  - "kibana_user"
+  - "monitoring_user"
+
+# ============================================================================
+# Server Configuration
+# ============================================================================
+
+listen: "0.0.0.0:8080"
+
+# ============================================================================
+# Logging Configuration
+# ============================================================================
+
+log_level: "info"
+log_format: "json"
+
+# ============================================================================
+# Monitoring Configuration
+# ============================================================================
+
+enable_metrics: true
+enableOtel: false

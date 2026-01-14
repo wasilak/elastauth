@@ -332,37 +332,36 @@ generate-elastauth-config:
 			'# elastauth Configuration for Demo Environment' \
 			'# This configuration demonstrates elastauth with Authelia authentication' \
 			'' \
-			'# Server configuration' \
-			'server:' \
-			'  port: 3000' \
-			'  host: "0.0.0.0"' \
+			'# Server listen address (overrides server.host and server.port)' \
+			'listen: "0.0.0.0:3000"' \
 			'' \
 			'# Authentication provider configuration' \
-			'auth_provider:' \
-			'  type: "authelia"' \
-			'  authelia:' \
-			'    # Header mappings from Authelia' \
-			'    user_header: "Remote-User"' \
-			'    groups_header: "Remote-Groups"' \
-			'    email_header: "Remote-Email"' \
-			'    name_header: "Remote-Name"' \
+			'auth_provider: "authelia"' \
 			'' \
-			'# Elasticsearch backend configuration' \
+			'# Authelia provider configuration' \
+			'authelia:' \
+			'  user_header: "Remote-User"' \
+			'  groups_header: "Remote-Groups"' \
+			'  email_header: "Remote-Email"' \
+			'  name_header: "Remote-Name"' \
+			'' \
+			'# Elasticsearch backend configuration (legacy format)' \
+			'elasticsearch_host: "https://elasticsearch:9200"' \
+			'elasticsearch_username: "elastic"' \
+			'elasticsearch_password: "demo-password-change-me"' \
+			'' \
+			'# Elasticsearch TLS configuration' \
 			'elasticsearch:' \
-			'  url: "https://elasticsearch:9200"' \
-			'  username: "elastic"' \
-			'  password: "demo-password-change-me"' \
 			'  tls:' \
 			'    enabled: true' \
 			'    ca_cert: "/certs/ca.crt"' \
-			'    skip_verify: false' \
+			'    skip_verify: true  # Set to true for demo environment with self-signed certs' \
 			'' \
 			'# Redis cache configuration' \
 			'cache:' \
 			'  type: "redis"' \
-			'  redis:' \
-			'    address: "redis:6379"' \
-			'    db: 0' \
+			'  redis_host: "redis:6379"' \
+			'  redis_db: 0' \
 			'' \
 			'# Logging configuration' \
 			'logging:' \

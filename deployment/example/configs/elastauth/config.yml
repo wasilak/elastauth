@@ -24,14 +24,13 @@ elasticsearch:
   tls:
     enabled: true
     ca_cert: "/certs/ca.crt"
-    skip_verify: false
+    skip_verify: true  # Set to true for demo environment with self-signed certs
 
 # Redis cache configuration
 cache:
   type: "redis"
-  redis:
-    address: "redis:6379"
-    db: 0
+  redis_host: "redis:6379"
+  redis_db: 0
 
 # Logging configuration
 logging:

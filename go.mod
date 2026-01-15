@@ -29,6 +29,7 @@ require (
 	github.com/go-jose/go-jose/v4 v4.1.3 // indirect
 	github.com/go-viper/mapstructure/v2 v2.5.0 // indirect
 	github.com/google/flatbuffers v25.12.19+incompatible // indirect
+	github.com/joho/godotenv v1.5.1 // indirect
 	github.com/klauspost/compress v1.18.2 // indirect
 	github.com/kylelemons/godebug v1.1.0 // indirect
 	github.com/patrickmn/go-cache v2.1.0+incompatible // indirect

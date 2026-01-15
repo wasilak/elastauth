@@ -18,10 +18,10 @@ import (
 func TestHealthRoute(t *testing.T) {
 	// Setup
 	e := echo.New()
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req := httptest.NewRequest(http.MethodGet, "/elastauth/health", nil)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
-	c.SetPath("/health")
+	c.SetPath("/elastauth/health")
 
 	response := "{\"status\":\"OK\"}\n"
 
@@ -68,7 +68,7 @@ func TestReadinessRoute(t *testing.T) {
 	}()
 
 	e := echo.New()
-	req := httptest.NewRequest(http.MethodGet, "/ready", nil)
+	req := httptest.NewRequest(http.MethodGet, "/elastauth/ready", nil)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
 
@@ -95,7 +95,7 @@ func TestReadinessRoute(t *testing.T) {
 
 func TestLivenessRoute(t *testing.T) {
 	e := echo.New()
-	req := httptest.NewRequest(http.MethodGet, "/live", nil)
+	req := httptest.NewRequest(http.MethodGet, "/elastauth/live", nil)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
 
@@ -134,7 +134,7 @@ func TestReadinessRoute_ElasticsearchFailure(t *testing.T) {
 	}()
 
 	e := echo.New()
-	req := httptest.NewRequest(http.MethodGet, "/ready", nil)
+	req := httptest.NewRequest(http.MethodGet, "/elastauth/ready", nil)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
 
@@ -155,10 +155,10 @@ func TestReadinessRoute_ElasticsearchFailure(t *testing.T) {
 func TestConfigRoute(t *testing.T) {
 	// Setup
 	e := echo.New()
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req := httptest.NewRequest(http.MethodGet, "/elastauth/config", nil)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
-	c.SetPath("/config")
+	c.SetPath("/elastauth/config")
 
 	viperDefaultRolesMock := []string{"your_default_kibana_role"}
 	viper.Set("default_roles", viperDefaultRolesMock)
@@ -224,7 +224,7 @@ func TestMainRoute_ValidRequest_ValidationPasses(t *testing.T) {
 	setupTestCache(t)
 
 	e := echo.New()
-	req := httptest.NewRequest(http.MethodPost, "/", nil)
+	req := httptest.NewRequest(http.MethodPost, "/elastauth", nil)
 	req.Header.Set("Remote-User", "validuser")
 	req.Header.Set("Remote-Groups", "admin,users")
 
@@ -250,7 +250,7 @@ func TestMainRoute_InvalidUsername_ValidationFails(t *testing.T) {
 
 	e := echo.New()
 	invalidUsername := "invalid username!@#$"
-	req := httptest.NewRequest(http.MethodPost, "/", nil)
+	req := httptest.NewRequest(http.MethodPost, "/elastauth", nil)
 	req.Header.Set("Remote-User", invalidUsername)
 	req.Header.Set("Remote-Groups", "admin")
 
@@ -274,7 +274,7 @@ func TestMainRoute_InvalidGroup_ValidationFails(t *testing.T) {
 	setupTestCache(t)
 
 	e := echo.New()
-	req := httptest.NewRequest(http.MethodPost, "/", nil)
+	req := httptest.NewRequest(http.MethodPost, "/elastauth", nil)
 	req.Header.Set("Remote-User", "validuser")
 	req.Header.Set("Remote-Groups", "admin,invalid\x00group")
 
@@ -298,7 +298,7 @@ func TestMainRoute_MissingUsername_BadRequest(t *testing.T) {
 	setupTestCache(t)
 
 	e := echo.New()
-	req := httptest.NewRequest(http.MethodPost, "/", nil)
+	req := httptest.NewRequest(http.MethodPost, "/elastauth", nil)
 
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
@@ -318,7 +318,7 @@ func TestMainRoute_GroupWhitelistEnforced(t *testing.T) {
 	setupTestCache(t)
 
 	e := echo.New()
-	req := httptest.NewRequest(http.MethodPost, "/", nil)
+	req := httptest.NewRequest(http.MethodPost, "/elastauth", nil)
 	req.Header.Set("Remote-User", "validuser")
 	req.Header.Set("Remote-Groups", "unauthorized_group")
 
@@ -344,7 +344,7 @@ func TestMainRoute_CacheKeyProperlyEncoded(t *testing.T) {
 
 	e := echo.New()
 	usernameWithSpecialChar := "user@domain.com"
-	req := httptest.NewRequest(http.MethodPost, "/", nil)
+	req := httptest.NewRequest(http.MethodPost, "/elastauth", nil)
 	req.Header.Set("Remote-User", usernameWithSpecialChar)
 	req.Header.Set("Remote-Groups", "admin")
 

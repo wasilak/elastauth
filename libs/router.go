@@ -37,9 +37,10 @@ func NewRouter(mode OperatingMode, echoServer *echo.Echo, proxyServer *goproxy.P
 
 // ServeHTTP implements http.Handler interface
 func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
-	// Check for special paths that bypass proxying
-	if r.isSpecialPath(req.URL.Path) {
-		// Use Echo server to handle special paths
+	// All elastauth endpoints are scoped under /elastauth/*
+	// Everything else (/*) goes to proxy in TransparentProxyMode
+	if strings.HasPrefix(req.URL.Path, "/elastauth/") || req.URL.Path == "/elastauth" {
+		// Use Echo server to handle elastauth endpoints
 		r.echoServer.ServeHTTP(w, req)
 		return
 	}
@@ -50,32 +51,11 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		// In auth-only mode, use Echo server for all requests
 		r.echoServer.ServeHTTP(w, req)
 	case TransparentProxyMode:
-		// In proxy mode, use goproxy for non-special paths
+		// In proxy mode, proxy all non-elastauth paths to Elasticsearch
 		r.proxyServer.ServeHTTP(w, req)
 	default:
 		http.Error(w, "Invalid operating mode", http.StatusInternalServerError)
 	}
-}
-
-// isSpecialPath checks if the path should bypass proxying
-// Special paths are handled directly by the Echo server regardless of mode
-func (r *Router) isSpecialPath(path string) bool {
-	specialPaths := []string{
-		"/health",
-		"/ready",
-		"/live",
-		"/config",
-		"/docs",
-		"/api/openapi.yaml",
-		"/metrics",
-	}
-
-	for _, sp := range specialPaths {
-		if strings.HasPrefix(path, sp) {
-			return true
-		}
-	}
-	return false
 }
 
 // GetMode returns the current operating mode

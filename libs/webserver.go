@@ -71,16 +71,16 @@ func WebserverInit(ctx context.Context) {
 		p.Use(e)
 	}
 
-	// Main application routes
-	e.GET("/", MainRoute)
-	e.GET("/config", ConfigRoute)
-	e.GET("/docs", SwaggerUIRoute)
-	e.GET("/api/openapi.yaml", SwaggerRoute)
+	// Main application routes - all scoped under /elastauth/*
+	e.GET("/elastauth", MainRoute)
+	e.GET("/elastauth/config", ConfigRoute)
+	e.GET("/elastauth/docs", SwaggerUIRoute)
+	e.GET("/elastauth/api/openapi.yaml", SwaggerRoute)
 
-	// Health check endpoints for Kubernetes
-	e.GET("/health", HealthRoute)      // Basic health check (legacy)
-	e.GET("/ready", ReadinessRoute)    // Kubernetes readiness probe
-	e.GET("/live", LivenessRoute)      // Kubernetes liveness probe
+	// Health check endpoints for Kubernetes - scoped under /elastauth/*
+	e.GET("/elastauth/health", HealthRoute)      // Basic health check (legacy)
+	e.GET("/elastauth/ready", ReadinessRoute)    // Kubernetes readiness probe
+	e.GET("/elastauth/live", LivenessRoute)      // Kubernetes liveness probe
 
 	// Check if proxy mode is enabled and build proxy configuration
 	proxyConfig, err := BuildProxyConfig()

@@ -479,8 +479,8 @@ func TestProxyIntegration_SpecialPathsBypass(t *testing.T) {
 
 	// Create Echo server with health endpoint
 	e := echo.New()
-	e.GET("/health", HealthRoute)
-	e.GET("/live", LivenessRoute)
+	e.GET("/elastauth/health", HealthRoute)
+	e.GET("/elastauth/live", LivenessRoute)
 
 	// Create router
 	router := NewRouter(TransparentProxyMode, e, proxyServer)
@@ -490,7 +490,7 @@ func TestProxyIntegration_SpecialPathsBypass(t *testing.T) {
 	defer testServer.Close()
 
 	// Test special paths that should bypass proxy
-	specialPaths := []string{"/health", "/live"}
+	specialPaths := []string{"/elastauth/health", "/elastauth/live"}
 
 	for _, path := range specialPaths {
 		t.Run(path, func(t *testing.T) {

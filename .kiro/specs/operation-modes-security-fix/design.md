@@ -26,9 +26,15 @@ graph TD
     end
     
     subgraph "Direct Auth Mode"
-        Client2[Client] -->|Bearer Token| EA2[elastauth]
-        EA2 -->|Validate Token| OIDC[OIDC Provider]
-        OIDC -->|JWKS| EA2
+        Client2[Browser] -->|1. Request| EA2[elastauth]
+        EA2 -->|2. Redirect to login| Client2
+        Client2 -->|3. Login| OIDC[OIDC Provider]
+        OIDC -->|4. Redirect with code| Client2
+        Client2 -->|5. Callback with code| EA2
+        EA2 -->|6. Exchange code for tokens| OIDC
+        OIDC -->|7. ID token + Access token| EA2
+        EA2 -->|8. Session cookie| Client2
+        Client2 -->|9. Request with session| EA2
         EA2 --> ES2[Elasticsearch]
     end
     

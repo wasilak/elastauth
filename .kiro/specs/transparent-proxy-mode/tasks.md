@@ -263,7 +263,7 @@ This implementation plan transforms elastauth into a dual-mode authentication pr
   - Add proxy error responses
   - _Requirements: 1.1, 1.2, 1.3, 1.4_
 
-- [ ] 21. Create architecture diagrams
+- [x] 21. Create architecture diagrams
   - Create `docs/src/content/docs/architecture/auth-only-mode.md`
     - Add Mermaid diagram showing Traefik → elastauth → Authelia flow
     - Document request/response flow
@@ -277,7 +277,7 @@ This implementation plan transforms elastauth into a dual-mode authentication pr
     - Add comparison table
   - _Requirements: 1.1, 1.2, 1.3, 1.4_
 
-- [ ] 22. Final checkpoint - Complete testing and validation
+- [x] 22. Final checkpoint - Complete testing and validation
   - Run full test suite
   - Perform manual testing with real Elasticsearch
   - Test with Traefik forward auth

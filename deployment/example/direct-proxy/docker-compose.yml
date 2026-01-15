@@ -17,9 +17,11 @@ services:
       - ELASTAUTH_ELASTICSEARCH_HOST=http://elasticsearch:9200
       - ELASTAUTH_ELASTICSEARCH_USERNAME=elastic
       - ELASTAUTH_ELASTICSEARCH_PASSWORD=changeme
-      # Cache configuration (using memory for simplicity)
-      - ELASTAUTH_CACHE_TYPE=memory
-      - ELASTAUTH_CACHE_EXPIRE=1h
+      # Cache configuration (use new format only to avoid validation bug)
+      - ELASTAUTH_CACHE_TYPE=redis
+      - ELASTAUTH_CACHE_EXPIRATION=1h
+      - ELASTAUTH_CACHE_REDIS_HOST=redis:6379
+      - ELASTAUTH_CACHE_REDIS_DB=0
       # Security
       - ELASTAUTH_SECRET_KEY=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
       # Server configuration
@@ -29,31 +31,12 @@ services:
     networks:
       - proxy-network
     depends_on:
-      - elasticsearch
-      - redis
-      - authelia
+      elasticsearch:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://localhost:8080/health"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  # Authelia authentication provider
-  authelia:
-    image: authelia/authelia:latest
-    container_name: authelia
-    volumes:
-      - ./authelia:/config
-    environment:
-      - TZ=UTC
-    ports:
-      - "9091:9091"  # Authelia API
-    networks:
-      - proxy-network
-    depends_on:
-      - redis
-    healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://localhost:9091/api/health"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -73,10 +56,11 @@ services:
     networks:
       - proxy-network
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1"]
-      interval: 30s
+      test: ["CMD-SHELL", "curl -u elastic:changeme -f http://localhost:9200/_cluster/health || exit 1"]
+      interval: 10s
       timeout: 10s
-      retries: 5
+      retries: 10
+      start_period: 60s
 
   # Redis for caching
   redis:

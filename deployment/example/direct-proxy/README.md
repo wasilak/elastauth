@@ -149,22 +149,22 @@ docker compose down -v
 
 ## Known Issues
 
-### Docker Image Cache Configuration Bug
+### Docker Image Needs Rebuild
 
-The current Docker image (`ghcr.io/wasilak/elastauth:main`) has a known issue with cache configuration validation when using environment variables. This causes elastauth to fail to start with the error:
+The current Docker image (`ghcr.io/wasilak/elastauth:main`) was built before recent fixes were committed. This causes:
 
-```
-ERROR Configuration validation failed error="multiple cache types configured"
-```
+1. **Cache Configuration Bug**: Environment variable `ELASTAUTH_CACHE_TYPE` triggers validation error
+2. **Status**: Fixed in source code (commit 4213c3c), waiting for new Docker image build
 
-**Workaround**: Run elastauth locally instead of using the Docker image:
+**Workaround Options**:
 
+**Option 1: Build Locally** (Recommended)
 ```bash
-# Build elastauth
+# Build elastauth from source
 go build -o elastauth
 
-# Start just Elasticsearch
-docker compose up -d elasticsearch
+# Start just the dependencies
+docker compose up -d elasticsearch redis
 
 # Run elastauth locally
 export ELASTAUTH_PROXY_ENABLED=true
@@ -174,17 +174,24 @@ export ELASTAUTH_ELASTICSEARCH_HOST=http://localhost:9200
 export ELASTAUTH_ELASTICSEARCH_USERNAME=elastic
 export ELASTAUTH_ELASTICSEARCH_PASSWORD=changeme
 export ELASTAUTH_SECRET_KEY=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
-export ELASTAUTH_CACHE_TYPE=memory
+export ELASTAUTH_CACHE_TYPE=redis
+export ELASTAUTH_CACHE_REDIS_HOST=localhost:6379
 export ELASTAUTH_LISTEN=0.0.0.0:8080
 
 ./elastauth
 ```
 
-This issue is fixed in the source code and will be resolved in the next Docker image build.
+**Option 2: Wait for New Docker Image**
 
-### Authelia HTTPS Requirement
+Once the Docker image is rebuilt with the latest source code, `docker compose up -d` will work as expected.
 
-Newer versions of Authelia require HTTPS for the `authelia_url` configuration. For local testing, this example uses a workaround configuration. In production, use proper TLS certificates.
+### Single-Command Example Status
+
+✅ **Will work** once Docker image is rebuilt
+✅ **Works now** if you build from source (Option 1 above)
+❌ **Doesn't work** with current Docker image due to cache validation bug
+
+The docker-compose.yml is correct and ready - it just needs the updated Docker image.
 
 ## Documentation
 

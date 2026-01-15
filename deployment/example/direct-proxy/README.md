@@ -147,6 +147,45 @@ docker compose down
 docker compose down -v
 ```
 
+## Known Issues
+
+### Docker Image Cache Configuration Bug
+
+The current Docker image (`ghcr.io/wasilak/elastauth:main`) has a known issue with cache configuration validation when using environment variables. This causes elastauth to fail to start with the error:
+
+```
+ERROR Configuration validation failed error="multiple cache types configured"
+```
+
+**Workaround**: Run elastauth locally instead of using the Docker image:
+
+```bash
+# Build elastauth
+go build -o elastauth
+
+# Start just Elasticsearch
+docker compose up -d elasticsearch
+
+# Run elastauth locally
+export ELASTAUTH_PROXY_ENABLED=true
+export ELASTAUTH_PROXY_ELASTICSEARCH_URL=http://localhost:9200
+export ELASTAUTH_AUTH_PROVIDER=authelia
+export ELASTAUTH_ELASTICSEARCH_HOST=http://localhost:9200
+export ELASTAUTH_ELASTICSEARCH_USERNAME=elastic
+export ELASTAUTH_ELASTICSEARCH_PASSWORD=changeme
+export ELASTAUTH_SECRET_KEY=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+export ELASTAUTH_CACHE_TYPE=memory
+export ELASTAUTH_LISTEN=0.0.0.0:8080
+
+./elastauth
+```
+
+This issue is fixed in the source code and will be resolved in the next Docker image build.
+
+### Authelia HTTPS Requirement
+
+Newer versions of Authelia require HTTPS for the `authelia_url` configuration. For local testing, this example uses a workaround configuration. In production, use proper TLS certificates.
+
 ## Documentation
 
 For detailed information, see:

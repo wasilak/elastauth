@@ -40,7 +40,7 @@ services:
 
   # elastauth in auth-only mode
   elastauth:
-    image: ghcr.io/wasilak/elastauth:latest
+    image: ghcr.io/wasilak/elastauth:main
     container_name: elastauth
     environment:
       - ELASTAUTH_AUTH_PROVIDER=authelia

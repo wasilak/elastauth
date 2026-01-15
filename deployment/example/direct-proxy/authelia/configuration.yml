@@ -1,5 +1,6 @@
 ---
 # Authelia configuration for direct proxy mode example
+# Simplified for local testing without HTTPS
 
 server:
   address: 'tcp://0.0.0.0:9091'
@@ -21,21 +22,15 @@ authentication_backend:
     path: /config/users_database.yml
 
 access_control:
-  default_policy: deny
-  rules:
-    # Allow all authenticated users
-    - domain: '*'
-      policy: one_factor
+  default_policy: one_factor
 
 session:
-  cookies:
-    - name: authelia_session
-      domain: 'example.com'
-      authelia_url: 'http://authelia:9091'
-      default_redirection_url: 'http://localhost:8080'
   secret: unsecure_session_secret_change_in_production
   expiration: 3600
   inactivity: 300
+  cookies:
+    - domain: 127.0.0.1
+      authelia_url: http://127.0.0.1:9091
 
 regulation:
   max_retries: 3

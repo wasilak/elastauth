@@ -35,8 +35,7 @@ authelia:
 # ============================================================================
 
 elasticsearch:
-  hosts:
-    - "http://elasticsearch:9200"
+  host: "http://elasticsearch:9200"
   username: "elastic"
   password: "changeme"
   dry_run: false

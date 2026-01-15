@@ -6,24 +6,134 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"net/http/httputil"
 	"net/url"
-	"strings"
 	"time"
 
-	"github.com/elazarl/goproxy"
 	"github.com/spf13/viper"
 	"github.com/wasilak/elastauth/cache"
 	"github.com/wasilak/elastauth/provider"
 )
 
-// InitProxyServer creates and configures a goproxy server with authentication
-// and credential injection handlers. It returns a configured proxy server ready
-// to handle HTTP requests.
+// ProxyHandler wraps httputil.ReverseProxy with authentication and credential injection
+type ProxyHandler struct {
+	proxy        *httputil.ReverseProxy
+	authProvider provider.AuthProvider
+	cacheManager cache.CacheInterface
+	config       *ProxyConfig
+}
+
+// ServeHTTP implements http.Handler interface
+func (h *ProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	startTime := time.Now()
+	IncrementActiveRequests()
+	defer DecrementActiveRequests()
+
+	// Step 1: Authenticate the request
+	authReq := &provider.AuthRequest{Request: r}
+	userInfo, err := h.authProvider.GetUser(r.Context(), authReq)
+	if err != nil {
+		RecordAuthenticationFailure()
+		RecordProxyError("auth_failed")
+		
+		slog.ErrorContext(r.Context(), "Authentication failed",
+			slog.String("error", err.Error()),
+			slog.String("method", r.Method),
+			slog.String("path", r.URL.Path),
+		)
+		
+		http.Error(w, "Authentication failed: "+err.Error(), http.StatusUnauthorized)
+		return
+	}
+
+	RecordAuthenticationSuccess()
+
+	// Step 2: Validate user input
+	if err := ValidateUsername(userInfo.Username); err != nil {
+		RecordProxyError("invalid_username")
+		http.Error(w, "Invalid username: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	if userInfo.Email != "" {
+		if err := ValidateEmail(userInfo.Email); err != nil {
+			RecordProxyError("invalid_email")
+			http.Error(w, "Invalid email: "+err.Error(), http.StatusBadRequest)
+			return
+		}
+	}
+
+	// Step 3: Validate request
+	if err := ValidateProxyRequest(r); err != nil {
+		RecordProxyError("invalid_request")
+		http.Error(w, "Invalid request: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	// Step 4: Get or generate credentials
+	credentials, err := getOrGenerateCredentials(r.Context(), userInfo, h.cacheManager)
+	if err != nil {
+		RecordProxyError("credential_generation_failed")
+		
+		slog.ErrorContext(r.Context(), "Failed to get credentials",
+			slog.String("error", err.Error()),
+			slog.String("username", userInfo.Username),
+		)
+		
+		http.Error(w, "Failed to generate credentials", http.StatusInternalServerError)
+		return
+	}
+
+	// Step 5: Inject credentials into the request
+	r.SetBasicAuth(credentials.Username, credentials.Password)
+
+	// Step 6: Modify the request to add custom director logic
+	originalDirector := h.proxy.Director
+	h.proxy.Director = func(req *http.Request) {
+		// Call original director to set up the proxy request
+		originalDirector(req)
+		
+		// Ensure credentials are set (in case director overwrites headers)
+		req.SetBasicAuth(credentials.Username, credentials.Password)
+		
+		slog.DebugContext(req.Context(), "Proxying request",
+			slog.String("username", userInfo.Username),
+			slog.String("method", req.Method),
+			slog.String("path", req.URL.Path),
+			slog.String("target_host", req.URL.Host),
+		)
+	}
+
+	// Step 7: Modify response handler
+	h.proxy.ModifyResponse = func(resp *http.Response) error {
+		duration := time.Since(startTime)
+		RecordProxyRequest(r.Method, resp.StatusCode, duration)
+		
+		slog.InfoContext(r.Context(), "Proxy response",
+			slog.String("username", userInfo.Username),
+			slog.Int("status_code", resp.StatusCode),
+			slog.Duration("duration", duration),
+		)
+		
+		// Sanitize response headers
+		sanitizeResponseHeadersInPlace(resp)
+		
+		return nil
+	}
+
+	// Step 8: Proxy the request
+	h.proxy.ServeHTTP(w, r)
+}
+
+// InitProxyServer creates and configures a reverse proxy with authentication
+// and credential injection. It returns a configured HTTP handler ready
+// to handle requests and proxy them to Elasticsearch.
 //
-// The proxy server is configured with:
-// - Authentication handler that validates requests using the auth provider
-// - Credential injection handler that adds Elasticsearch credentials
-// - Response handler for logging and metrics
+// The proxy handler:
+// - Authenticates requests using the auth provider
+// - Generates/retrieves Elasticsearch credentials
+// - Injects credentials into proxied requests
+// - Logs responses and collects metrics
 //
 // Parameters:
 //   - config: Proxy configuration including Elasticsearch URL and timeouts
@@ -31,9 +141,9 @@ import (
 //   - cacheManager: Cache interface for storing/retrieving credentials
 //
 // Returns:
-//   - *goproxy.ProxyHttpServer: Configured proxy server
+//   - http.Handler: Configured proxy handler
 //   - error: Any error encountered during initialization
-func InitProxyServer(config *ProxyConfig, authProvider provider.AuthProvider, cacheManager cache.CacheInterface) (*goproxy.ProxyHttpServer, error) {
+func InitProxyServer(config *ProxyConfig, authProvider provider.AuthProvider, cacheManager cache.CacheInterface) (http.Handler, error) {
 	if config == nil {
 		return nil, fmt.Errorf("proxy config cannot be nil")
 	}
@@ -46,43 +156,30 @@ func InitProxyServer(config *ProxyConfig, authProvider provider.AuthProvider, ca
 		return nil, fmt.Errorf("cache manager cannot be nil")
 	}
 
-	// Create new proxy server
-	proxy := goproxy.NewProxyHttpServer()
+	// Parse target Elasticsearch URL
+	targetURL, err := parseElasticsearchURL(config.ElasticsearchURL)
+	if err != nil {
+		return nil, fmt.Errorf("invalid Elasticsearch URL: %w", err)
+	}
 
-	// Configure proxy behavior based on log level
-	// Set verbose mode to false for production, can be made configurable later
-	proxy.Verbose = false
+	// Create reverse proxy
+	proxy := httputil.NewSingleHostReverseProxy(targetURL)
 
-	// Add request tracking handler (runs first to track all requests)
-	proxy.OnRequest().DoFunc(func(r *http.Request, ctx *goproxy.ProxyCtx) (*http.Request, *http.Response) {
-		// Increment active requests counter
-		IncrementActiveRequests()
-		
-		// Store start time in context for latency tracking
-		ctx.UserData = map[string]interface{}{
-			"start_time": time.Now(),
-		}
-		
-		return r, nil
-	})
+	// Configure transport with timeouts and connection pooling
+	proxy.Transport = &http.Transport{
+		MaxIdleConns:        config.MaxIdleConns,
+		IdleConnTimeout:     config.IdleConnTimeout,
+		TLSHandshakeTimeout: 10 * time.Second,
+		// TLS configuration would go here if needed
+	}
 
-	// Add authentication handler
-	// This handler runs second and validates the request using the auth provider
-	proxy.OnRequest().DoFunc(func(r *http.Request, ctx *goproxy.ProxyCtx) (*http.Request, *http.Response) {
-		return handleAuthentication(r, ctx, authProvider)
-	})
-
-	// Add credential injection handler
-	// This handler runs third and injects Elasticsearch credentials into the request
-	proxy.OnRequest().DoFunc(func(r *http.Request, ctx *goproxy.ProxyCtx) (*http.Request, *http.Response) {
-		return handleCredentialInjection(r, ctx, config, cacheManager)
-	})
-
-	// Add response handler for logging and metrics
-	// This handler runs after the response is received from Elasticsearch
-	proxy.OnResponse().DoFunc(func(r *http.Response, ctx *goproxy.ProxyCtx) *http.Response {
-		return handleResponse(r, ctx)
-	})
+	// Create proxy handler
+	handler := &ProxyHandler{
+		proxy:        proxy,
+		authProvider: authProvider,
+		cacheManager: cacheManager,
+		config:       config,
+	}
 
 	slog.Info("Proxy server initialized",
 		"elasticsearch_url", config.ElasticsearchURL,
@@ -91,365 +188,13 @@ func InitProxyServer(config *ProxyConfig, authProvider provider.AuthProvider, ca
 		"tls_enabled", config.TLS.Enabled,
 	)
 
-	return proxy, nil
+	return handler, nil
 }
 
-// handleAuthentication performs authentication and stores user info in context.
-// It extracts user information using the configured auth provider and validates it.
-// If authentication fails, it returns an appropriate HTTP error response (401/403).
-// On success, it stores the UserInfo in ctx.UserData for use by subsequent handlers.
-//
-// Parameters:
-//   - r: The incoming HTTP request
-//   - ctx: The goproxy context for this request
-//   - authProvider: The authentication provider to use for extracting user info
-//
-// Returns:
-//   - *http.Request: The original request (unchanged)
-//   - *http.Response: nil on success, or an error response (401/403) on failure
-func handleAuthentication(r *http.Request, ctx *goproxy.ProxyCtx, authProvider provider.AuthProvider) (*http.Request, *http.Response) {
-	// Create auth request from HTTP request
-	authReq := &provider.AuthRequest{
-		Request: r,
-	}
-
-	// Extract user info from request using auth provider
-	userInfo, err := authProvider.GetUser(r.Context(), authReq)
-	if err != nil {
-		// Record authentication failure metric
-		RecordAuthenticationFailure()
-		RecordProxyError("auth_failed")
-		
-		slog.ErrorContext(r.Context(), "Authentication failed",
-			slog.String("error", err.Error()),
-			slog.String("method", r.Method),
-			slog.String("path", r.URL.Path),
-			slog.String("remote_addr", r.RemoteAddr),
-		)
-
-		// Return 401 Unauthorized response
-		return r, goproxy.NewResponse(r,
-			goproxy.ContentTypeText,
-			http.StatusUnauthorized,
-			"Authentication failed: "+err.Error())
-	}
-	
-	// Record authentication success metric
-	RecordAuthenticationSuccess()
-
-	// Validate username
-	if err := ValidateUsername(userInfo.Username); err != nil {
-		RecordProxyError("invalid_username")
-		
-		slog.ErrorContext(r.Context(), "Invalid username format",
-			slog.String("error", err.Error()),
-			slog.String("username", userInfo.Username),
-		)
-
-		// Return 400 Bad Request for invalid username format
-		return r, goproxy.NewResponse(r,
-			goproxy.ContentTypeText,
-			http.StatusBadRequest,
-			"Invalid username format: "+err.Error())
-	}
-
-	// Validate email if provided
-	if userInfo.Email != "" {
-		if err := ValidateEmail(userInfo.Email); err != nil {
-			RecordProxyError("invalid_email")
-			
-			slog.ErrorContext(r.Context(), "Invalid email format",
-				slog.String("error", err.Error()),
-				slog.String("email", userInfo.Email),
-			)
-
-			// Return 400 Bad Request for invalid email format
-			return r, goproxy.NewResponse(r,
-				goproxy.ContentTypeText,
-				http.StatusBadRequest,
-				"Invalid email format: "+err.Error())
-		}
-	}
-
-	// Validate full name if provided
-	if userInfo.FullName != "" {
-		if err := ValidateName(userInfo.FullName); err != nil {
-			RecordProxyError("invalid_name")
-			
-			slog.ErrorContext(r.Context(), "Invalid name format",
-				slog.String("error", err.Error()),
-				slog.String("name", userInfo.FullName),
-			)
-
-			// Return 400 Bad Request for invalid name format
-			return r, goproxy.NewResponse(r,
-				goproxy.ContentTypeText,
-				http.StatusBadRequest,
-				"Invalid name format: "+err.Error())
-		}
-	}
-
-	// Validate groups if provided
-	if len(userInfo.Groups) > 0 {
-		for _, group := range userInfo.Groups {
-			if err := ValidateGroupName(group); err != nil {
-				RecordProxyError("invalid_group")
-				
-				slog.ErrorContext(r.Context(), "Invalid group name",
-					slog.String("error", err.Error()),
-					slog.String("group", group),
-				)
-
-				// Return 400 Bad Request for invalid group name
-				return r, goproxy.NewResponse(r,
-					goproxy.ContentTypeText,
-					http.StatusBadRequest,
-					"Invalid group name: "+err.Error())
-			}
-		}
-	}
-
-	// Store user info in context for next handler
-	// We need to preserve the start_time from the tracking handler
-	if userDataMap, ok := ctx.UserData.(map[string]interface{}); ok {
-		userDataMap["user_info"] = userInfo
-	} else {
-		// Fallback if tracking handler didn't run
-		ctx.UserData = map[string]interface{}{
-			"user_info": userInfo,
-		}
-	}
-
-	slog.DebugContext(r.Context(), "Authentication successful",
-		slog.String("username", userInfo.Username),
-		slog.String("email", userInfo.Email),
-		slog.Int("groups_count", len(userInfo.Groups)),
-	)
-
-	// Return nil response to continue proxying
-	return r, nil
-}
-
-// handleCredentialInjection gets/generates ES credentials and injects them.
-// It retrieves the authenticated user info from the proxy context, gets or generates
-// Elasticsearch credentials (with caching), and injects them as Basic Auth headers.
-// It also rewrites the request URL to target the configured Elasticsearch cluster.
-//
-// Parameters:
-//   - r: The incoming HTTP request
-//   - ctx: The goproxy context containing UserData from authentication handler
-//   - config: Proxy configuration with Elasticsearch URL
-//   - cacheManager: Cache interface for storing/retrieving credentials
-//
-// Returns:
-//   - *http.Request: The modified request with credentials and rewritten URL
-//   - *http.Response: nil on success, or an error response (500) on failure
-func handleCredentialInjection(r *http.Request, ctx *goproxy.ProxyCtx, config *ProxyConfig, cacheManager cache.CacheInterface) (*http.Request, *http.Response) {
-	// Validate and sanitize proxy request to prevent injection attacks
-	if err := ValidateProxyRequest(r); err != nil {
-		RecordProxyError("invalid_request")
-		
-		slog.ErrorContext(r.Context(), "Request validation failed",
-			slog.String("error", err.Error()),
-			slog.String("method", r.Method),
-			slog.String("path", r.URL.Path),
-			slog.String("remote_addr", r.RemoteAddr),
-		)
-		return r, goproxy.NewResponse(r,
-			goproxy.ContentTypeText,
-			http.StatusBadRequest,
-			"Invalid request: "+err.Error())
-	}
-
-	// Retrieve user info from context (set by authentication handler)
-	var userInfo *provider.UserInfo
-	if userDataMap, ok := ctx.UserData.(map[string]interface{}); ok {
-		if ui, ok := userDataMap["user_info"].(*provider.UserInfo); ok {
-			userInfo = ui
-		}
-	}
-	
-	if userInfo == nil {
-		RecordProxyError("missing_user_info")
-		
-		slog.ErrorContext(r.Context(), "User info not found in proxy context")
-		return r, goproxy.NewResponse(r,
-			goproxy.ContentTypeText,
-			http.StatusInternalServerError,
-			"Internal server error: user info not available")
-	}
-
-	// Get or generate Elasticsearch credentials
-	credentials, err := getOrGenerateCredentials(r.Context(), userInfo, cacheManager)
-	if err != nil {
-		RecordProxyError("credential_generation_failed")
-		
-		slog.ErrorContext(r.Context(), "Failed to get or generate credentials",
-			slog.String("error", err.Error()),
-			slog.String("username", userInfo.Username),
-		)
-		return r, goproxy.NewResponse(r,
-			goproxy.ContentTypeText,
-			http.StatusInternalServerError,
-			"Failed to generate credentials: "+err.Error())
-	}
-
-	// Inject Basic Auth header
-	r.SetBasicAuth(credentials.Username, credentials.Password)
-
-	// Rewrite request URL to target Elasticsearch
-	// Parse the target Elasticsearch URL
-	targetURL, err := parseElasticsearchURL(config.ElasticsearchURL)
-	if err != nil {
-		RecordProxyError("invalid_elasticsearch_url")
-		
-		slog.ErrorContext(r.Context(), "Failed to parse Elasticsearch URL",
-			slog.String("error", err.Error()),
-			slog.String("url", config.ElasticsearchURL),
-		)
-		return r, goproxy.NewResponse(r,
-			goproxy.ContentTypeText,
-			http.StatusInternalServerError,
-			"Internal server error: invalid Elasticsearch URL")
-	}
-
-	// Rewrite the request URL to point to Elasticsearch
-	r.URL.Scheme = targetURL.Scheme
-	r.URL.Host = targetURL.Host
-	r.Host = targetURL.Host
-
-	// Preserve the original path and query parameters
-	// The path is already set in r.URL.Path from the original request
-
-	slog.DebugContext(r.Context(), "Credential injection successful",
-		slog.String("username", credentials.Username),
-		slog.String("target_host", r.URL.Host),
-		slog.String("path", r.URL.Path),
-	)
-
-	// Return nil response to continue proxying
-	return r, nil
-}
-
-// handleResponse processes responses for logging and metrics.
-// It logs response information, sanitizes sensitive headers, and collects metrics.
-// This handler runs after the response is received from Elasticsearch.
-//
-// Parameters:
-//   - r: The HTTP response from Elasticsearch
-//   - ctx: The goproxy context for this request
-//
-// Returns:
-//   - *http.Response: The response (potentially with sanitized headers)
-func handleResponse(r *http.Response, ctx *goproxy.ProxyCtx) *http.Response {
-	// Decrement active requests counter
-	defer DecrementActiveRequests()
-	
-	// Handle nil response (shouldn't happen, but be defensive)
-	if r == nil {
-		slog.Error("Received nil response from Elasticsearch")
-		RecordProxyError("nil_response")
-		return r
-	}
-
-	// Get request context for logging
-	reqCtx := context.Background()
-	var method string
-	if ctx.Req != nil {
-		reqCtx = ctx.Req.Context()
-		method = ctx.Req.Method
-	}
-
-	// Extract user info from context if available
-	var username string
-	if userDataMap, ok := ctx.UserData.(map[string]interface{}); ok {
-		// Get start time for latency calculation
-		if startTime, ok := userDataMap["start_time"].(time.Time); ok {
-			duration := time.Since(startTime)
-			RecordProxyRequest(method, r.StatusCode, duration)
-		}
-		
-		// Get user info if available
-		if userInfo, ok := userDataMap["user_info"].(*provider.UserInfo); ok && userInfo != nil {
-			username = userInfo.Username
-		}
-	}
-
-	// Log response information
-	slog.InfoContext(reqCtx, "Proxy response",
-		slog.String("username", username),
-		slog.Int("status_code", r.StatusCode),
-		slog.String("status", r.Status),
-		slog.Int64("content_length", r.ContentLength),
-		slog.String("content_type", r.Header.Get("Content-Type")),
-	)
-
-	// Log detailed response info at debug level
-	if slog.Default().Enabled(reqCtx, slog.LevelDebug) {
-		// Sanitize headers before logging
-		sanitizedHeaders := sanitizeResponseHeaders(r.Header)
-		slog.DebugContext(reqCtx, "Proxy response details",
-			slog.String("username", username),
-			slog.Any("headers", sanitizedHeaders),
-			slog.String("protocol", r.Proto),
-		)
-	}
-
-	// Sanitize sensitive headers from the response
-	// This prevents credentials or tokens from being sent to the client
-	sanitizeResponseHeadersInPlace(r)
-
-	return r
-}
-
-// sanitizeResponseHeaders creates a sanitized copy of response headers for logging.
-// It redacts sensitive header values to prevent credentials from appearing in logs.
-//
-// Parameters:
-//   - headers: The original HTTP headers
-//
-// Returns:
-//   - map[string]interface{}: Sanitized headers safe for logging
-func sanitizeResponseHeaders(headers http.Header) map[string]interface{} {
-	sanitized := make(map[string]interface{})
-	
-	// List of sensitive header names (case-insensitive)
-	sensitiveHeaders := []string{
-		"authorization",
-		"www-authenticate",
-		"proxy-authorization",
-		"proxy-authenticate",
-		"cookie",
-		"set-cookie",
-		"x-api-key",
-		"x-auth-token",
-	}
-
-	for key, values := range headers {
-		lowerKey := strings.ToLower(key)
-		isSensitive := false
-		
-		// Check if this is a sensitive header
-		for _, sensitiveHeader := range sensitiveHeaders {
-			if lowerKey == sensitiveHeader || strings.Contains(lowerKey, "token") || strings.Contains(lowerKey, "secret") {
-				isSensitive = true
-				break
-			}
-		}
-
-		if isSensitive {
-			sanitized[key] = "***REDACTED***"
-		} else {
-			// For non-sensitive headers, include the actual values
-			if len(values) == 1 {
-				sanitized[key] = values[0]
-			} else {
-				sanitized[key] = values
-			}
-		}
-	}
-
-	return sanitized
+// UserCredentials holds Elasticsearch credentials for a user
+type UserCredentials struct {
+	Username string
+	Password string
 }
 
 // sanitizeResponseHeadersInPlace removes or redacts sensitive headers from the response.
@@ -465,23 +210,14 @@ func sanitizeResponseHeadersInPlace(r *http.Response) {
 	// Remove sensitive headers that should not be forwarded to the client
 	// These are headers that might contain Elasticsearch credentials or internal information
 	headersToRemove := []string{
-		"WWW-Authenticate",      // Elasticsearch auth challenges
-		"Proxy-Authenticate",    // Proxy auth challenges
-		"X-Elastic-Product",     // Internal Elasticsearch header (optional, but good practice)
+		"WWW-Authenticate",   // Elasticsearch auth challenges
+		"Proxy-Authenticate", // Proxy auth challenges
+		"X-Elastic-Product",  // Internal Elasticsearch header (optional, but good practice)
 	}
 
 	for _, header := range headersToRemove {
 		r.Header.Del(header)
 	}
-
-	// Note: We don't remove Authorization header here because it's a request header,
-	// not a response header. The client never sees the Authorization header we inject.
-}
-
-// UserCredentials holds Elasticsearch credentials for a user
-type UserCredentials struct {
-	Username string
-	Password string
 }
 
 // getOrGenerateCredentials retrieves cached credentials or generates new ones.

@@ -4,7 +4,6 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/elazarl/goproxy"
 	"github.com/labstack/echo/v4"
 )
 
@@ -22,12 +21,12 @@ const (
 type Router struct {
 	mode        OperatingMode
 	authHandler http.Handler
-	proxyServer *goproxy.ProxyHttpServer
+	proxyServer http.Handler
 	echoServer  *echo.Echo
 }
 
 // NewRouter creates a new Router instance
-func NewRouter(mode OperatingMode, echoServer *echo.Echo, proxyServer *goproxy.ProxyHttpServer) *Router {
+func NewRouter(mode OperatingMode, echoServer *echo.Echo, proxyServer http.Handler) *Router {
 	return &Router{
 		mode:        mode,
 		echoServer:  echoServer,

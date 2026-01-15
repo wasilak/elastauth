@@ -68,6 +68,8 @@ services:
       - xpack.security.http.ssl.enabled=false
       - ELASTIC_PASSWORD=changeme
       - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+    ports:
+      - "9200:9200"  # Expose for local testing
     networks:
       - proxy-network
     healthcheck:

@@ -237,8 +237,13 @@ func LoadConfig() (*Config, error) {
 	}
 
 	// Additional custom validations
-	if err := validateSecretKey(cfg.SecretKey); err != nil {
-		return nil, err
+	// Validate secret key format (validator can't check hex decoding)
+	decodedKey, err := hex.DecodeString(cfg.SecretKey)
+	if err != nil {
+		return nil, fmt.Errorf("secret_key must be hex-encoded: %w", err)
+	}
+	if len(decodedKey) != 32 {
+		return nil, fmt.Errorf("secret_key must be 64 hex characters (32 bytes for AES-256)")
 	}
 
 	// Provider-specific validation
@@ -261,12 +266,7 @@ func LoadConfig() (*Config, error) {
 		}
 	}
 
-	if cfg.Cache.Type != "" {
-		if err := validateCacheConfig(&cfg.Cache); err != nil {
-			return nil, err
-		}
-	}
-
+	// Proxy validation
 	if cfg.Proxy.Enabled {
 		if cfg.Proxy.ElasticsearchURL == "" {
 			return nil, fmt.Errorf("proxy.elasticsearch_url is required when proxy is enabled")
@@ -274,62 +274,36 @@ func LoadConfig() (*Config, error) {
 		if cfg.Proxy.MaxIdleConns < 1 {
 			return nil, fmt.Errorf("proxy.max_idle_conns must be at least 1")
 		}
-		if err := validateProxyConfig(&cfg.Proxy); err != nil {
-			return nil, err
+		
+		// Validate TLS cert/key pairs
+		if cfg.Proxy.TLS.ClientCert != "" && cfg.Proxy.TLS.ClientKey == "" {
+			return nil, fmt.Errorf("proxy.tls.client_key is required when proxy.tls.client_cert is provided")
+		}
+		if cfg.Proxy.TLS.ClientKey != "" && cfg.Proxy.TLS.ClientCert == "" {
+			return nil, fmt.Errorf("proxy.tls.client_cert is required when proxy.tls.client_key is provided")
+		}
+
+		// Validate cert files exist if TLS is enabled
+		if cfg.Proxy.TLS.Enabled {
+			if cfg.Proxy.TLS.CACert != "" {
+				if _, err := os.Stat(cfg.Proxy.TLS.CACert); os.IsNotExist(err) {
+					return nil, fmt.Errorf("proxy.tls.ca_cert file does not exist: %s", cfg.Proxy.TLS.CACert)
+				}
+			}
+			if cfg.Proxy.TLS.ClientCert != "" {
+				if _, err := os.Stat(cfg.Proxy.TLS.ClientCert); os.IsNotExist(err) {
+					return nil, fmt.Errorf("proxy.tls.client_cert file does not exist: %s", cfg.Proxy.TLS.ClientCert)
+				}
+			}
+			if cfg.Proxy.TLS.ClientKey != "" {
+				if _, err := os.Stat(cfg.Proxy.TLS.ClientKey); os.IsNotExist(err) {
+					return nil, fmt.Errorf("proxy.tls.client_key file does not exist: %s", cfg.Proxy.TLS.ClientKey)
+				}
+			}
 		}
 	}
 
 	return &cfg, nil
-}
-
-// validateSecretKey validates the secret key format
-func validateSecretKey(key string) error {
-	decodedKey, err := hex.DecodeString(key)
-	if err != nil {
-		return fmt.Errorf("secret_key must be hex-encoded: %w", err)
-	}
-	if len(decodedKey) != 32 {
-		return fmt.Errorf("secret_key must be 64 hex characters (32 bytes for AES-256)")
-	}
-	return nil
-}
-
-// validateCacheConfig validates cache-specific configuration
-func validateCacheConfig(cfg *CacheConfig) error {
-	// No additional validation needed - duration parsing handled by viper
-	return nil
-}
-
-// validateProxyConfig validates proxy-specific configuration
-func validateProxyConfig(cfg *ProxyConfig) error {
-	// Validate TLS cert/key pairs
-	if cfg.TLS.ClientCert != "" && cfg.TLS.ClientKey == "" {
-		return fmt.Errorf("proxy.tls.client_key is required when proxy.tls.client_cert is provided")
-	}
-	if cfg.TLS.ClientKey != "" && cfg.TLS.ClientCert == "" {
-		return fmt.Errorf("proxy.tls.client_cert is required when proxy.tls.client_key is provided")
-	}
-
-	// Validate cert files exist if TLS is enabled
-	if cfg.TLS.Enabled {
-		if cfg.TLS.CACert != "" {
-			if _, err := os.Stat(cfg.TLS.CACert); os.IsNotExist(err) {
-				return fmt.Errorf("proxy.tls.ca_cert file does not exist: %s", cfg.TLS.CACert)
-			}
-		}
-		if cfg.TLS.ClientCert != "" {
-			if _, err := os.Stat(cfg.TLS.ClientCert); os.IsNotExist(err) {
-				return fmt.Errorf("proxy.tls.client_cert file does not exist: %s", cfg.TLS.ClientCert)
-			}
-		}
-		if cfg.TLS.ClientKey != "" {
-			if _, err := os.Stat(cfg.TLS.ClientKey); os.IsNotExist(err) {
-				return fmt.Errorf("proxy.tls.client_key file does not exist: %s", cfg.TLS.ClientKey)
-			}
-		}
-	}
-
-	return nil
 }
 
 // HandleSecretKey manages the encryption secret key

@@ -108,10 +108,10 @@ http:
 - Does NOT proxy requests to Elasticsearch
 
 **Key Endpoints:**
-- `/` - Main authentication endpoint (called by Traefik)
-- `/health` - Health check endpoint
-- `/ready` - Readiness check endpoint
-- `/config` - Configuration information endpoint
+- `/elastauth` - Main authentication endpoint (called by Traefik)
+- `/elastauth/health` - Health check endpoint
+- `/elastauth/ready` - Readiness check endpoint
+- `/elastauth/config` - Configuration information endpoint
 
 ### Authentication Provider
 

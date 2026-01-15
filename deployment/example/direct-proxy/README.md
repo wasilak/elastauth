@@ -68,13 +68,13 @@ curl -H "Remote-User: john" \
 
 ```bash
 # elastauth health
-curl http://localhost:8080/health
+curl http://localhost:8080/elastauth/health
 
 # elastauth readiness (includes Elasticsearch check)
-curl http://localhost:8080/ready
+curl http://localhost:8080/elastauth/ready
 
 # elastauth configuration
-curl http://localhost:8080/config
+curl http://localhost:8080/elastauth/config
 ```
 
 ## Configuration

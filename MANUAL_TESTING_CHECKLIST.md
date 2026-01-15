@@ -175,25 +175,25 @@ docker compose down -v
 
 - [ ] **Test 4.1**: Health endpoint bypasses proxy
   ```bash
-  curl http://localhost:5000/health
+  curl http://localhost:5000/elastauth/health
   ```
   - Expected: Returns health status, NOT proxied to Elasticsearch
 
 - [ ] **Test 4.2**: Readiness endpoint bypasses proxy
   ```bash
-  curl http://localhost:5000/ready
+  curl http://localhost:5000/elastauth/ready
   ```
   - Expected: Returns readiness status
 
 - [ ] **Test 4.3**: Liveness endpoint bypasses proxy
   ```bash
-  curl http://localhost:5000/live
+  curl http://localhost:5000/elastauth/live
   ```
   - Expected: Returns liveness status
 
 - [ ] **Test 4.4**: Config endpoint bypasses proxy
   ```bash
-  curl http://localhost:5000/config
+  curl http://localhost:5000/elastauth/config
   ```
   - Expected: Returns configuration info
 
@@ -281,14 +281,14 @@ docker compose down -v
 - [ ] **Test 6.4**: Readiness check fails when Elasticsearch down
   ```bash
   docker compose stop elasticsearch
-  curl http://localhost:5000/ready
+  curl http://localhost:5000/elastauth/ready
   ```
   - Expected: HTTP 503 Service Unavailable (in proxy mode)
 
 - [ ] **Test 6.5**: Liveness check succeeds even when Elasticsearch down
   ```bash
   docker compose stop elasticsearch
-  curl http://localhost:5000/live
+  curl http://localhost:5000/elastauth/live
   ```
   - Expected: HTTP 200 (liveness independent of Elasticsearch)
 

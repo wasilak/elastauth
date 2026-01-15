@@ -75,9 +75,9 @@ sequenceDiagram
     participant C as Client
     participant E as elastauth
     
-    C->>E: GET /health
+    C->>E: GET /elastauth/health
     
-    Note over E: Router detects<br/>special path
+    Note over E: Router detects<br/>elastauth path
     E->>E: Handle directly
     E-->>C: 200 OK + Health Status<br/>(No proxy to ES)
 ```
@@ -127,12 +127,14 @@ graph TB
 - Routes all other paths to goproxy in proxy mode
 
 **Special Paths (Bypass Proxy):**
-- `/health` - Health check endpoint
-- `/ready` - Readiness check endpoint
-- `/live` - Liveness check endpoint
-- `/config` - Configuration endpoint
-- `/docs` - Documentation endpoint
-- `/metrics` - Metrics endpoint
+- `/elastauth/health` - Health check endpoint
+- `/elastauth/ready` - Readiness check endpoint
+- `/elastauth/live` - Liveness check endpoint
+- `/elastauth/config` - Configuration endpoint
+- `/elastauth` - Main authentication endpoint
+- `/elastauth/docs` - Documentation endpoint
+- `/elastauth/api/openapi.yaml` - OpenAPI specification
+- `/elastauth/metrics` - Metrics endpoint (if enabled)
 
 ### goproxy.ProxyHttpServer
 
@@ -508,10 +510,10 @@ Health checks include Elasticsearch connectivity:
 
 ```bash
 # Liveness (always responds)
-curl http://elastauth:5000/live
+curl http://elastauth:5000/elastauth/live
 
 # Readiness (checks Elasticsearch)
-curl http://elastauth:5000/ready
+curl http://elastauth:5000/elastauth/ready
 ```
 
 ## Troubleshooting

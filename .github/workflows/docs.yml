@@ -3,13 +3,13 @@ name: Deploy Documentation to GitHub Pages
 on:
   push:
     branches:
-      - main
+      - v2
     paths:
       - 'docs/**'
       - '.github/workflows/docs.yml'
   pull_request:
     branches:
-      - main
+      - v2
     paths:
       - 'docs/**'
       - '.github/workflows/docs.yml'
@@ -64,8 +64,8 @@ jobs:
           path: ./docs/dist
 
   deploy:
-    # Deploy on push to main branch OR manual dispatch
-    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'workflow_dispatch'
+    # Deploy on push to v2 branch OR manual dispatch
+    if: (github.event_name == 'push' && github.ref == 'refs/heads/v2') || github.event_name == 'workflow_dispatch'
     needs: build
     runs-on:  ubuntu-latest
     permissions:

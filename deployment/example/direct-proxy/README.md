@@ -90,21 +90,33 @@ Both use password: `password`
 
 ### Key Settings
 
-In `config.yml`:
+In `docker-compose.yml` environment variables:
 
 ```yaml
-proxy:
-  enabled: true  # Transparent proxy mode
-  elasticsearch_url: "http://elasticsearch:9200"
-  timeout: "30s"
-```
-
-Or via environment variables (see `.env.example`):
-
-```bash
+# Proxy mode
 ELASTAUTH_PROXY_ENABLED=true
 ELASTAUTH_PROXY_ELASTICSEARCH_URL=http://elasticsearch:9200
+
+# Default roles for all users
+ELASTAUTH_DEFAULT_ROLES=kibana_user,monitoring_user
+
+# Group to role mappings
+ELASTAUTH_GROUP_MAPPINGS_ADMIN=superuser
+ELASTAUTH_GROUP_MAPPINGS_DEV=kibana_admin,monitoring_user
 ```
+
+**How it works:**
+- Users in the `admin` group get the `superuser` role (full Elasticsearch access)
+- Users in the `dev` group get `kibana_admin` and `monitoring_user` roles
+- Users without groups get the default roles (`kibana_user`, `monitoring_user`)
+
+**Available Elasticsearch Roles:**
+- `superuser` - Full cluster access
+- `kibana_admin` - Kibana administration
+- `kibana_user` - Kibana read/write access
+- `monitoring_user` - Monitoring data access
+- `viewer` - Read-only access
+- `editor` - Read/write access
 
 ## Request Flow
 

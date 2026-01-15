@@ -25,6 +25,11 @@ services:
       - ELASTAUTH_SECRET_KEY=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
       # Server configuration
       - ELASTAUTH_LISTEN=0.0.0.0:8080
+      # Default roles for users without group mappings
+      - ELASTAUTH_DEFAULT_ROLES=kibana_user,monitoring_user
+      # Group to role mappings
+      - ELASTAUTH_GROUP_MAPPINGS_ADMIN=superuser
+      - ELASTAUTH_GROUP_MAPPINGS_DEV=kibana_admin,monitoring_user
     ports:
       - "8080:8080"  # elastauth proxy endpoint
     networks:
@@ -37,7 +42,7 @@ services:
       authelia:
         condition: service_started
     healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8080/health"]
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8080/elastauth/health"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -60,8 +65,9 @@ services:
         condition: service_healthy
 
   # Elasticsearch as the backend
+  # https://www.elastic.co/docs/deploy-manage/deploy/self-managed/install-elasticsearch-docker-basic
   elasticsearch:
-    image: docker.elastic.co/elasticsearch/elasticsearch:8.11.0
+    image: docker.elastic.co/elasticsearch/elasticsearch:9.2.4
     container_name: elasticsearch
     environment:
       - discovery.type=single-node

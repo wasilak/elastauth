@@ -19,7 +19,7 @@ Get started with elastauth in minutes:
 
 ### 1. Choose Your Authentication Provider
 - **[Authelia](/elastauth/providers/authelia)** - If you're using Authelia for authentication
-- **[OAuth2/OIDC](/elastauth/providers/oidc)** - For Keycloak, Casdoor, Authentik, Auth0, Azure AD, and others
+- **[OAuth2/OIDC](/elastauth/providers/oidc)** - For Keycloak, Authentik, Auth0, Azure AD, and other OIDC providers
 
 ### 2. Configure elastauth
 ```yaml
@@ -70,7 +70,6 @@ graph TB
     subgraph "Authentication Layer"
         A[Authelia]
         KC[Keycloak]
-        CD[Casdoor]
         AT[Authentik]
         A0[Auth0]
         AZ[Azure AD]
@@ -93,7 +92,6 @@ graph TB
     
     A -.-> EA
     KC -.-> EA
-    CD -.-> EB
     AT -.-> EB
     A0 -.-> EC
     AZ -.-> EC
@@ -147,11 +145,10 @@ elastauth supports a wide range of authentication providers:
 - **[Authelia](/elastauth/providers/authelia)**: Header-based authentication
 - **[OAuth2/OIDC](/elastauth/providers/oidc)**: Generic OAuth2/OIDC support for:
   - Keycloak
-  - Authentik  
-  - Casdoor
+  - Authentik
   - Auth0
   - Azure AD
-  - And many more...
+  - And many more OIDC-compliant providers...
 
 ## Operating Modes
 

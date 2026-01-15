@@ -623,17 +623,11 @@ func ConfigRoute(c echo.Context) error {
 	switch authProvider {
 	case "authelia":
 		providerConfig = GetEffectiveAutheliaConfig()
-	case "casdoor":
-		providerConfig = map[string]interface{}{
-			"endpoint":      viper.GetString("casdoor.endpoint"),
-			"client_id":     viper.GetString("casdoor.client_id"),
-			"client_secret": "***", // Always mask secrets
-		}
 	case "oidc":
 		providerConfig = map[string]interface{}{
-			"issuer":        viper.GetString("oidc.issuer"),
-			"client_id":     viper.GetString("oidc.client_id"),
-			"client_secret": "***", // Always mask secrets
+			"issuer":         viper.GetString("oidc.issuer"),
+			"client_id":      viper.GetString("oidc.client_id"),
+			"client_secret":  "***", // Always mask secrets
 			"claim_mappings": viper.GetStringMapString("oidc.claim_mappings"),
 		}
 	default:

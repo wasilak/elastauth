@@ -21,7 +21,6 @@ graph TB
     subgraph "Authentication Sources"
         A[Authelia Headers]
         K[Keycloak]
-        C[Casdoor]
         AU[Authentik]
         A0[Auth0]
         AZ[Azure AD]
@@ -213,7 +212,7 @@ Kibana automatically works with elastauth-managed users:
 elastauth integrates with external authentication through:
 
 - **Header-based Systems**: Authelia, Traefik Forward Auth
-- **OAuth2/OIDC Systems**: Keycloak, Casdoor, Authentik, Auth0, Azure AD
+- **OAuth2/OIDC Systems**: Keycloak, Authentik, Auth0, Azure AD, and other OIDC providers
 - **Custom Providers**: Extensible through the provider interface
 
 ## Configuration Examples
@@ -416,7 +415,6 @@ elastauth integrates with several external systems:
 
 - **Authelia**: [Documentation](https://www.authelia.com/)
 - **Keycloak**: [Documentation](https://www.keycloak.org/documentation)
-- **Casdoor**: [Documentation](https://casdoor.org/docs/)
 - **Authentik**: [Documentation](https://docs.goauthentik.io/)
 
 ### Caching

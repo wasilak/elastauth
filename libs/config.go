@@ -15,6 +15,7 @@ import (
 
 	"go.opentelemetry.io/otel"
 
+	"github.com/joho/godotenv"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 )
@@ -68,6 +69,13 @@ func InitConfiguration() error {
 	pflag.CommandLine.AddGoFlagSet(flag.CommandLine)
 	pflag.Parse()
 	viper.BindPFlags(pflag.CommandLine)
+
+	// Load .env file if it exists (before other configuration)
+	// This allows .env to set environment variables that Viper will read
+	// godotenv.Load() silently ignores missing .env files
+	if err := godotenv.Load(); err == nil {
+		log.Println("Loaded environment variables from .env file")
+	}
 
 	// Configure environment variable support with proper precedence
 	viper.SetEnvPrefix("elastauth")
@@ -138,10 +146,6 @@ func setConfigurationDefaults() {
 	viper.SetDefault("oidc.claim_mappings.email", "email")
 	viper.SetDefault("oidc.claim_mappings.groups", "groups")
 	viper.SetDefault("oidc.claim_mappings.full_name", "name")
-
-	// Casdoor provider defaults
-	viper.SetDefault("casdoor.organization", "built-in")
-	viper.SetDefault("casdoor.application", "app-built-in")
 
 	// Proxy configuration defaults
 	viper.SetDefault("proxy.enabled", false)
@@ -221,13 +225,6 @@ func bindProviderEnvironmentVariables() {
 	
 	// OIDC custom headers (special handling for map[string]string)
 	bindOIDCCustomHeadersEnvironmentVariables()
-	
-	// Casdoor provider configuration
-	viper.BindEnv("casdoor.endpoint", "ELASTAUTH_CASDOOR_ENDPOINT")
-	viper.BindEnv("casdoor.client_id", "ELASTAUTH_CASDOOR_CLIENT_ID")
-	viper.BindEnv("casdoor.client_secret", "ELASTAUTH_CASDOOR_CLIENT_SECRET")
-	viper.BindEnv("casdoor.organization", "ELASTAUTH_CASDOOR_ORGANIZATION")
-	viper.BindEnv("casdoor.application", "ELASTAUTH_CASDOOR_APPLICATION")
 	
 	// Proxy configuration
 	viper.BindEnv("proxy.enabled", "ELASTAUTH_PROXY_ENABLED")
@@ -346,13 +343,6 @@ func GetSupportedEnvironmentVariables() []string {
 		
 		// OIDC custom headers (pattern: ELASTAUTH_OIDC_CUSTOM_HEADERS_<HEADER_NAME>)
 		// Example: ELASTAUTH_OIDC_CUSTOM_HEADERS_X_CUSTOM_HEADER
-		
-		// Casdoor provider configuration
-		"ELASTAUTH_CASDOOR_ENDPOINT",
-		"ELASTAUTH_CASDOOR_CLIENT_ID",
-		"ELASTAUTH_CASDOOR_CLIENT_SECRET",
-		"ELASTAUTH_CASDOOR_ORGANIZATION",
-		"ELASTAUTH_CASDOOR_APPLICATION",
 		
 		// Proxy configuration
 		"ELASTAUTH_PROXY_ENABLED",
@@ -504,7 +494,7 @@ func ValidateProviderConfiguration(ctx context.Context) error {
 	}
 	
 	// Validate provider type
-	validProviders := []string{"authelia", "casdoor", "oidc"}
+	validProviders := []string{"authelia", "oidc"}
 	validProvider := false
 	for _, provider := range validProviders {
 		if authProvider == provider {
@@ -513,7 +503,7 @@ func ValidateProviderConfiguration(ctx context.Context) error {
 		}
 	}
 	if !validProvider {
-		return fmt.Errorf("invalid auth_provider: %s (must be one of: authelia, casdoor, oidc)", authProvider)
+		return fmt.Errorf("invalid auth_provider: %s (must be one of: authelia, oidc)", authProvider)
 	}
 
 	// Validate that exactly one provider is configured by checking for conflicting explicit configuration
@@ -527,13 +517,6 @@ func ValidateProviderConfiguration(ctx context.Context) error {
 		// Check if Authelia is explicitly configured when another provider is selected
 		if hasExplicitAutheliaConfig() {
 			explicitProviders = append(explicitProviders, "authelia")
-		}
-	}
-	
-	if authProvider != "casdoor" {
-		// Check if Casdoor is explicitly configured when another provider is selected
-		if hasExplicitCasdoorConfig() {
-			explicitProviders = append(explicitProviders, "casdoor")
 		}
 	}
 	
@@ -553,8 +536,6 @@ func ValidateProviderConfiguration(ctx context.Context) error {
 	switch authProvider {
 	case "authelia":
 		return ValidateAutheliaConfiguration(ctx)
-	case "casdoor":
-		return ValidateCasdoorConfiguration(ctx)
 	case "oidc":
 		return ValidateOIDCConfiguration(ctx)
 	}
@@ -569,12 +550,6 @@ func hasExplicitAutheliaConfig() bool {
 		   viper.IsSet("authelia.header_groups") && viper.GetString("authelia.header_groups") != "Remote-Groups" ||
 		   viper.IsSet("authelia.header_email") && viper.GetString("authelia.header_email") != "Remote-Email" ||
 		   viper.IsSet("authelia.header_name") && viper.GetString("authelia.header_name") != "Remote-Name"
-}
-
-// hasExplicitCasdoorConfig checks if user has explicitly configured Casdoor
-func hasExplicitCasdoorConfig() bool {
-	// Casdoor requires explicit configuration - no defaults that would work
-	return viper.IsSet("casdoor.endpoint") || viper.IsSet("casdoor.client_id") || viper.IsSet("casdoor.client_secret")
 }
 
 // hasExplicitOIDCConfig checks if user has explicitly configured OIDC
@@ -602,23 +577,6 @@ func ValidateAutheliaConfiguration(ctx context.Context) error {
 	// Use default if still empty (for backward compatibility with tests)
 	if headerGroups == "" {
 		headerGroups = "Remote-Groups"
-	}
-
-	return nil
-}
-
-// ValidateCasdoorConfiguration validates Casdoor provider configuration.
-func ValidateCasdoorConfiguration(ctx context.Context) error {
-	required := map[string]string{
-		"casdoor.endpoint":      "Casdoor endpoint",
-		"casdoor.client_id":     "Casdoor client ID",
-		"casdoor.client_secret": "Casdoor client secret",
-	}
-
-	for key, description := range required {
-		if len(viper.GetString(key)) == 0 {
-			return fmt.Errorf("casdoor provider requires %s (set %s)", description, key)
-		}
 	}
 
 	return nil
@@ -978,22 +936,6 @@ func GetEffectiveOIDCConfig() map[string]interface{} {
 	return config
 }
 
-// GetEffectiveCasdoorConfig returns the effective Casdoor configuration with all settings.
-func GetEffectiveCasdoorConfig() map[string]interface{} {
-	config := make(map[string]interface{})
-	
-	// Basic Casdoor settings
-	config["endpoint"] = viper.GetString("casdoor.endpoint")
-	config["client_id"] = viper.GetString("casdoor.client_id")
-	config["client_secret"] = viper.GetString("casdoor.client_secret")
-	
-	// Optional Casdoor settings
-	config["organization"] = viper.GetString("casdoor.organization")
-	config["application"] = viper.GetString("casdoor.application")
-	
-	return config
-}
-
 // GetEffectiveProviderConfig returns the effective configuration for the currently selected provider.
 func GetEffectiveProviderConfig() map[string]interface{} {
 	authProvider := viper.GetString("auth_provider")
@@ -1004,8 +946,6 @@ func GetEffectiveProviderConfig() map[string]interface{} {
 	switch authProvider {
 	case "authelia":
 		return GetEffectiveAutheliaConfig()
-	case "casdoor":
-		return GetEffectiveCasdoorConfig()
 	case "oidc":
 		return GetEffectiveOIDCConfig()
 	default:

@@ -9,13 +9,12 @@ The OAuth2/OIDC provider validates JWT tokens from any OAuth2/OIDC-compliant aut
 
 This provider works with any OAuth2/OIDC-compliant system including:
 - Keycloak
-- Casdoor  
 - Authentik
 - Auth0
 - Azure AD
 - Pocket-ID
 - Ory Hydra
-- And many others
+- And many other OIDC-compliant providers
 
 ## Configuration
 
@@ -90,21 +89,6 @@ oidc:
     email: "email"
     groups: "realm_access.roles"
     full_name: "name"
-```
-
-### Casdoor
-
-```yaml
-oidc:
-  issuer: "https://casdoor.example.com"
-  client_id: "elastauth"
-  client_secret: "${CASDOOR_SECRET}"
-  scopes: ["openid", "profile", "email"]
-  claim_mappings:
-    username: "name"
-    email: "email"
-    groups: "roles"
-    full_name: "displayName"
 ```
 
 ### Authentik

@@ -38,7 +38,7 @@ info:
     
     - **Authelia**: Header-based authentication (Remote-User, Remote-Groups, etc.)
     - **OAuth2/OIDC**: Generic OAuth2/OIDC provider supporting JWT tokens
-      - Casdoor, Keycloak, Authentik, Auth0, Azure AD, Pocket-ID, Ory Hydra
+      - Keycloak, Authentik, Auth0, Azure AD, Pocket-ID, Ory Hydra, and other OIDC providers
     
     ## Documentation Links
     

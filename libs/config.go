@@ -226,6 +226,34 @@ func InitConfiguration() error {
 		viper.Set("oidc.scopes", scopes)
 	}
 
+	// Handle default_roles from environment variable (comma-separated)
+	if rolesEnv := os.Getenv("ELASTAUTH_DEFAULT_ROLES"); rolesEnv != "" {
+		roles := strings.Split(rolesEnv, ",")
+		for i, role := range roles {
+			roles[i] = strings.TrimSpace(role)
+		}
+		viper.Set("default_roles", roles)
+	}
+
+	// Handle group_mappings from environment variables
+	// Format: ELASTAUTH_GROUP_MAPPINGS_<GROUP>=role1,role2,role3
+	groupMappings := make(map[string][]string)
+	for _, env := range os.Environ() {
+		pair := strings.SplitN(env, "=", 2)
+		if len(pair) == 2 && strings.HasPrefix(pair[0], "ELASTAUTH_GROUP_MAPPINGS_") {
+			groupName := strings.TrimPrefix(pair[0], "ELASTAUTH_GROUP_MAPPINGS_")
+			groupName = strings.ToLower(groupName) // Normalize to lowercase
+			roles := strings.Split(pair[1], ",")
+			for i, role := range roles {
+				roles[i] = strings.TrimSpace(role)
+			}
+			groupMappings[groupName] = roles
+		}
+	}
+	if len(groupMappings) > 0 {
+		viper.Set("group_mappings", groupMappings)
+	}
+
 	// Handle OIDC custom headers from environment variables
 	customHeaders := make(map[string]string)
 	for _, env := range os.Environ() {

@@ -424,7 +424,154 @@ elastauth integrates with several external systems:
 - **Redis**: [Documentation](https://redis.io/documentation)
 - **cachego**: [Documentation](https://github.com/wasilak/cachego)
 
+## Operating Modes
+
+elastauth supports two distinct operating modes to accommodate different deployment architectures and requirements.
+
+### Mode Overview
+
+```mermaid
+graph TB
+    Start([elastauth Deployment]) --> Decision{proxy.enabled?}
+    Decision -->|false| AuthOnly[Authentication-Only Mode]
+    Decision -->|true| Proxy[Transparent Proxy Mode]
+    
+    AuthOnly --> UseCase1[Use with Traefik<br/>or other reverse proxy]
+    Proxy --> UseCase2[Direct client access<br/>to Elasticsearch]
+    
+    style AuthOnly fill:#e3f2fd
+    style Proxy fill:#e1f5e1
+```
+
+### Authentication-Only Mode (Default)
+
+In authentication-only mode, elastauth acts as a pure authentication service that validates requests and returns authorization headers. An external reverse proxy (like Traefik) handles the actual proxying to Elasticsearch.
+
+**Architecture:**
+```mermaid
+graph LR
+    Client --> Traefik[Traefik<br/>Reverse Proxy]
+    Traefik -->|Forward Auth| elastauth[elastauth<br/>Auth Service]
+    Traefik -->|Proxied Request| ES[Elasticsearch]
+    
+    style elastauth fill:#e1f5e1
+    style Traefik fill:#e3f2fd
+```
+
+**Configuration:**
+```yaml
+proxy:
+  enabled: false  # Default
+```
+
+**Key Characteristics:**
+- Returns authorization headers only
+- Does not proxy requests to Elasticsearch
+- Designed for Traefik forward auth pattern
+- Separates authentication from proxying
+- Enables advanced routing capabilities
+
+### Transparent Proxy Mode
+
+In transparent proxy mode, elastauth handles both authentication and request proxying to Elasticsearch in a single service. No external reverse proxy is required.
+
+**Architecture:**
+```mermaid
+graph LR
+    Client --> elastauth[elastauth<br/>Auth + Proxy]
+    elastauth --> ES[Elasticsearch]
+    
+    style elastauth fill:#e1f5e1
+```
+
+**Configuration:**
+```yaml
+proxy:
+  enabled: true
+  elasticsearch_url: "https://elasticsearch:9200"
+  timeout: "30s"
+```
+
+**Key Characteristics:**
+- Authenticates and proxies requests
+- Single service to deploy
+- Direct connection to Elasticsearch
+- Simpler deployment architecture
+- Fewer network hops
+
+## Operating Modes Comparison
+
+| Aspect | Authentication-Only Mode | Transparent Proxy Mode |
+|--------|-------------------------|------------------------|
+| **Default** | ✅ Yes | No |
+| **Components** | elastauth + Traefik | elastauth only |
+| **Network Hops** | 2 (Traefik → elastauth, Traefik → ES) | 1 (elastauth → ES) |
+| **Configuration** | Multiple config files | Single config file |
+| **Routing** | Advanced (Traefik) | Simple path-based |
+| **Scalability** | Scale independently | Scale together |
+| **Flexibility** | Multiple backends | Elasticsearch only |
+| **Deployment** | More complex | Simpler |
+| **Latency** | Higher (extra hop) | Lower (direct) |
+| **Use Case** | Multi-service platform | Standalone Elasticsearch |
+
+### When to Use Authentication-Only Mode
+
+✅ **Choose authentication-only mode when:**
+- You already use Traefik as your reverse proxy
+- You need to protect multiple backend services
+- You require advanced routing rules (path-based, header-based, etc.)
+- You want to scale authentication and proxy independently
+- You need Traefik's middleware capabilities
+- You have complex load balancing requirements
+
+**Example Use Cases:**
+- Multi-tenant platform with multiple Elasticsearch clusters
+- Platform with Elasticsearch, Kibana, Grafana, and other services
+- Integration with existing Traefik infrastructure
+- Chaining with Authelia or other authentication systems
+
+### When to Use Transparent Proxy Mode
+
+✅ **Choose transparent proxy mode when:**
+- Elasticsearch is your only backend service
+- You want simpler deployment with fewer components
+- You need lower latency (fewer network hops)
+- You don't have existing reverse proxy infrastructure
+- You prefer unified configuration and logging
+- You want easier troubleshooting
+
+**Example Use Cases:**
+- Standalone Elasticsearch deployment
+- Simple Docker Compose stack
+- Kubernetes deployment with single backend
+- Development and testing environments
+
+### Mode Selection Decision Tree
+
+```mermaid
+graph TD
+    Start([Choose Operating Mode]) --> Q1{Existing Traefik<br/>infrastructure?}
+    Q1 -->|Yes| AuthOnly[Authentication-Only Mode]
+    Q1 -->|No| Q2{Multiple backend<br/>services?}
+    Q2 -->|Yes| AuthOnly
+    Q2 -->|No| Q3{Need advanced<br/>routing?}
+    Q3 -->|Yes| AuthOnly
+    Q3 -->|No| Q4{Prefer simpler<br/>deployment?}
+    Q4 -->|Yes| Proxy[Transparent Proxy Mode]
+    Q4 -->|No| Q5{Need lower<br/>latency?}
+    Q5 -->|Yes| Proxy
+    Q5 -->|No| AuthOnly
+    
+    style AuthOnly fill:#e3f2fd
+    style Proxy fill:#e1f5e1
+```
+
 ## Next Steps
+
+### Architecture Deep Dive
+- **[Authentication-Only Mode Architecture](/elastauth/architecture/auth-only-mode)** - Detailed architecture and flow diagrams
+- **[Transparent Proxy Mode Architecture](/elastauth/architecture/proxy-mode)** - Detailed architecture and flow diagrams
+- **[Operating Modes Comparison](/elastauth/deployment/modes)** - Detailed comparison and selection guide
 
 ### Getting Started
 - **[Authentication Providers](/elastauth/providers/)** - Configure your authentication system
@@ -433,6 +580,10 @@ elastauth integrates with several external systems:
 - **[Cache Providers](/elastauth/cache/)** - Configure caching for performance
   - [Redis Cache](/elastauth/cache/redis) - Distributed caching for scaling
   - [Memory Cache](/elastauth/cache/) - Simple in-memory caching
+
+### Deployment Guides
+- **[Authentication-Only Mode Deployment](/elastauth/deployment/auth-only-mode)** - Deploy with Traefik
+- **[Transparent Proxy Mode Deployment](/elastauth/deployment/proxy-mode)** - Deploy as standalone proxy
 
 ### Configuration and Deployment
 Refer to the main README for deployment instructions and configuration examples.

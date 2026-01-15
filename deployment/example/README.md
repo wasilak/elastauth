@@ -516,7 +516,7 @@ listen: "0.0.0.0:3000"  # Server listen address
 
 **Authentication Provider:**
 ```yaml
-auth_provider: "authelia"  # Options: authelia, casdoor, oidc
+auth_provider: "authelia"  # Options: authelia, oidc
 
 authelia:
   user_header: "Remote-User"

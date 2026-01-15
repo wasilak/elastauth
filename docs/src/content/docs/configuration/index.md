@@ -60,7 +60,7 @@ proxy:
 ### Authentication Provider
 
 ```yaml
-auth_provider: "authelia"  # Options: authelia, oidc, casdoor
+auth_provider: "authelia"  # Options: authelia, oidc
 ```
 
 **Environment variable:** `ELASTAUTH_AUTH_PROVIDER=authelia`

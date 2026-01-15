@@ -40,7 +40,7 @@ Quick links:
 ## Features
 
 - **Dual Operating Modes** - Authentication-only or transparent proxy
-- **Pluggable Providers** - Authelia, OIDC, Casdoor support
+- **Pluggable Providers** - Authelia, OIDC support
 - **Stateless Operation** - No persistent authentication state
 - **Credential Caching** - Redis, memory, or file-based caching
 - **Horizontal Scaling** - Multi-instance deployments with Redis

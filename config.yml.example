@@ -46,7 +46,7 @@ proxy:
 # Authentication Provider Configuration
 # ============================================================================
 
-# Select authentication provider: authelia, oidc, or casdoor
+# Select authentication provider: authelia, oidc
 auth_provider: "authelia"
 
 # Authelia Provider Configuration (header-based authentication)
@@ -95,14 +95,6 @@ oidc:
   # Custom headers to send with OIDC requests (optional)
   custom_headers:
     X-Custom-Header: "value"
-
-# Casdoor Provider Configuration
-casdoor:
-  endpoint: "https://your-casdoor-instance.com"
-  client_id: "your-client-id"
-  client_secret: "your-client-secret"
-  organization: "built-in"    # Casdoor organization name
-  application: "app-built-in" # Casdoor application name
 
 # ============================================================================
 # Elasticsearch Configuration

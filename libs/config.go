@@ -135,6 +135,62 @@ func InitConfiguration() error {
 	viper.AutomaticEnv()
 	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 
+	// Explicitly bind all configuration fields
+	// Core configuration
+	viper.BindEnv("auth_provider")
+	viper.BindEnv("secret_key")
+	viper.BindEnv("listen")
+	viper.BindEnv("log_level")
+	viper.BindEnv("log_format")
+	viper.BindEnv("enable_metrics")
+	viper.BindEnv("enableOtel")
+	
+	// Elasticsearch configuration
+	viper.BindEnv("elasticsearch.username")
+	viper.BindEnv("elasticsearch.password")
+	viper.BindEnv("elasticsearch.dry_run")
+	
+	// Cache configuration
+	viper.BindEnv("cache.type")
+	viper.BindEnv("cache.expiration")
+	viper.BindEnv("cache.redis_host")
+	viper.BindEnv("cache.redis_db")
+	viper.BindEnv("cache.path")
+	
+	// Proxy configuration
+	viper.BindEnv("proxy.enabled")
+	viper.BindEnv("proxy.elasticsearch_url")
+	viper.BindEnv("proxy.timeout")
+	viper.BindEnv("proxy.max_idle_conns")
+	viper.BindEnv("proxy.idle_conn_timeout")
+	viper.BindEnv("proxy.tls.enabled")
+	viper.BindEnv("proxy.tls.insecure_skip_verify")
+	viper.BindEnv("proxy.tls.ca_cert")
+	viper.BindEnv("proxy.tls.client_cert")
+	viper.BindEnv("proxy.tls.client_key")
+	
+	// Authelia configuration
+	viper.BindEnv("authelia.header_username")
+	viper.BindEnv("authelia.header_groups")
+	viper.BindEnv("authelia.header_email")
+	viper.BindEnv("authelia.header_name")
+	
+	// OIDC configuration
+	viper.BindEnv("oidc.issuer")
+	viper.BindEnv("oidc.client_id")
+	viper.BindEnv("oidc.client_secret")
+	viper.BindEnv("oidc.authorization_endpoint")
+	viper.BindEnv("oidc.token_endpoint")
+	viper.BindEnv("oidc.userinfo_endpoint")
+	viper.BindEnv("oidc.jwks_uri")
+	viper.BindEnv("oidc.client_auth_method")
+	viper.BindEnv("oidc.token_validation")
+	viper.BindEnv("oidc.use_pkce")
+	viper.BindEnv("oidc.claim_mappings.username")
+	viper.BindEnv("oidc.claim_mappings.email")
+	viper.BindEnv("oidc.claim_mappings.groups")
+	viper.BindEnv("oidc.claim_mappings.full_name")
+
 	viper.SetConfigName("config")
 	viper.SetConfigType("yaml")
 	viper.AddConfigPath(viper.GetString("config"))
@@ -145,6 +201,20 @@ func InitConfiguration() error {
 	// Read config file
 	if err := viper.ReadInConfig(); err != nil {
 		log.Println(err)
+	}
+
+	// Handle Elasticsearch hosts from environment variable
+	// Viper doesn't handle array env vars well, so we do it manually
+	if hostsEnv := os.Getenv("ELASTAUTH_ELASTICSEARCH_HOSTS_0"); hostsEnv != "" {
+		// Single host via ELASTAUTH_ELASTICSEARCH_HOSTS_0
+		viper.Set("elasticsearch.hosts", []string{hostsEnv})
+	} else if hostsEnv := os.Getenv("ELASTAUTH_ELASTICSEARCH_HOSTS"); hostsEnv != "" {
+		// Comma-separated hosts via ELASTAUTH_ELASTICSEARCH_HOSTS
+		hosts := strings.Split(hostsEnv, ",")
+		for i, host := range hosts {
+			hosts[i] = strings.TrimSpace(host)
+		}
+		viper.Set("elasticsearch.hosts", hosts)
 	}
 
 	// Handle OIDC scopes from environment variable (comma-separated)

@@ -29,13 +29,26 @@ type Config struct {
 
 // NewProvider creates a new Authelia provider instance
 func NewProvider(config interface{}) (provider.AuthProvider, error) {
-	// For backward compatibility, we read configuration from Viper
-	// rather than requiring explicit configuration
+	// Read configuration from Viper using the new nested structure
 	autheliaConfig := Config{
-		HeaderUsername: viper.GetString("headers_username"),
-		HeaderGroups:   viper.GetString("headers_groups"),
-		HeaderEmail:    viper.GetString("headers_email"),
-		HeaderName:     viper.GetString("headers_name"),
+		HeaderUsername: viper.GetString("authelia.header_username"),
+		HeaderGroups:   viper.GetString("authelia.header_groups"),
+		HeaderEmail:    viper.GetString("authelia.header_email"),
+		HeaderName:     viper.GetString("authelia.header_name"),
+	}
+	
+	// If not found in new structure, try old keys for backward compatibility
+	if autheliaConfig.HeaderUsername == "" {
+		autheliaConfig.HeaderUsername = viper.GetString("headers_username")
+	}
+	if autheliaConfig.HeaderGroups == "" {
+		autheliaConfig.HeaderGroups = viper.GetString("headers_groups")
+	}
+	if autheliaConfig.HeaderEmail == "" {
+		autheliaConfig.HeaderEmail = viper.GetString("headers_email")
+	}
+	if autheliaConfig.HeaderName == "" {
+		autheliaConfig.HeaderName = viper.GetString("headers_name")
 	}
 	
 	p := &Provider{config: autheliaConfig}

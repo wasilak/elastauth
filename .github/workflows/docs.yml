@@ -64,8 +64,8 @@ jobs:
           path: ./docs/dist
 
   deploy:
-    # Deploy on push to v2 branch OR manual dispatch
-    if: (github.event_name == 'push' && github.ref == 'refs/heads/v2') || github.event_name == 'workflow_dispatch'
+    # Only deploy from main branch (prevents v2 deployments until ready)
+    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
     needs: build
     runs-on:  ubuntu-latest
     permissions:

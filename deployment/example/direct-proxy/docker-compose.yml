@@ -1,4 +1,3 @@
-
 services:
   # elastauth in transparent proxy mode
   elastauth:
@@ -35,11 +34,30 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      authelia:
+        condition: service_started
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://localhost:8080/health"]
       interval: 10s
       timeout: 5s
       retries: 5
+
+  # Authelia authentication provider
+  # Using older version (4.37) that doesn't require HTTPS for authelia_url
+  authelia:
+    image: authelia/authelia:4.37
+    container_name: authelia
+    volumes:
+      - ./authelia:/config
+    environment:
+      - TZ=UTC
+    ports:
+      - "9091:9091"  # Authelia API
+    networks:
+      - proxy-network
+    depends_on:
+      redis:
+        condition: service_healthy
 
   # Elasticsearch as the backend
   elasticsearch:
@@ -49,6 +67,7 @@ services:
       - discovery.type=single-node
       - xpack.security.enabled=true
       - xpack.security.http.ssl.enabled=false
+      # Set bootstrap password for elastic user
       - ELASTIC_PASSWORD=changeme
       - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
     ports:

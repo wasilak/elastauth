@@ -30,9 +30,7 @@ session:
   inactivity: 300
   cookies:
     - domain: 127.0.0.1
-      authelia_url: https://127.0.0.1:9091
-      # Note: Using HTTPS URL to satisfy Authelia requirements
-      # In production, use proper TLS certificates
+      authelia_url: http://127.0.0.1:9091
 
 regulation:
   max_retries: 3

@@ -695,6 +695,15 @@ func ValidateCacheConfiguration(ctx context.Context) error {
 	legacyCacheType := viper.GetString("cache_type")
 	newCacheType := viper.GetString("cache.type")
 	
+	// If both are set to the same value, it's likely due to env var key replacer
+	// (ELASTAUTH_CACHE_TYPE maps to both cache_type and cache.type)
+	// In this case, treat it as a single configuration
+	if legacyCacheType != "" && newCacheType != "" && legacyCacheType == newCacheType {
+		// This is the same configuration, not a conflict
+		// Use the legacy format for validation
+		newCacheType = ""
+	}
+	
 	// Count configured cache types
 	configuredCacheTypes := 0
 	var activeCacheType string

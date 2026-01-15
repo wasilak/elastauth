@@ -26,7 +26,8 @@ services:
       # Server configuration
       - ELASTAUTH_LISTEN=0.0.0.0:8080
       # Default roles for users without group mappings
-      - ELASTAUTH_DEFAULT_ROLES=kibana_user,monitoring_user
+      # Note: Use roles with appropriate cluster monitoring privileges
+      - ELASTAUTH_DEFAULT_ROLES=monitoring_user,kibana_user,remote_monitoring_agent
       # Group to role mappings
       - ELASTAUTH_GROUP_MAPPINGS_ADMIN=superuser
       - ELASTAUTH_GROUP_MAPPINGS_DEV=kibana_admin,monitoring_user
@@ -98,6 +99,8 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    ports:
+      - "6379:6379"    
 
 networks:
   proxy-network:

@@ -8,13 +8,10 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
-	"time"
 
 	"github.com/labstack/echo/v4"
-	gocache "github.com/patrickmn/go-cache"
 	"github.com/spf13/viper"
 	"github.com/wasilak/elastauth/cache"
-	"go.opentelemetry.io/otel"
 )
 
 func generateBenchmarkKey() string {
@@ -101,12 +98,14 @@ func BenchmarkGenerateTemporaryUserPassword(b *testing.B) {
 
 func BenchmarkCacheSet(b *testing.B) {
 	ctx := context.Background()
-	cache.CacheInstance = &cache.GoCache{
-		Cache:  gocache.New(1*time.Hour, 2*time.Hour),
-		TTL:    1 * time.Hour,
-		Tracer: otel.Tracer("bench"),
-	}
-
+	
+	// Set up memory cache configuration
+	viper.Set("cache.type", "memory")
+	viper.Set("cache.expiration", "1h")
+	
+	// Initialize cache using new system
+	cache.CacheInit(ctx)
+	
 	b.ReportAllocs()
 	b.ResetTimer()
 
@@ -118,11 +117,13 @@ func BenchmarkCacheSet(b *testing.B) {
 
 func BenchmarkCacheGet(b *testing.B) {
 	ctx := context.Background()
-	cache.CacheInstance = &cache.GoCache{
-		Cache:  gocache.New(1*time.Hour, 2*time.Hour),
-		TTL:    1 * time.Hour,
-		Tracer: otel.Tracer("bench"),
-	}
+	
+	// Set up memory cache configuration
+	viper.Set("cache.type", "memory")
+	viper.Set("cache.expiration", "1h")
+	
+	// Initialize cache using new system
+	cache.CacheInit(ctx)
 
 	cache.CacheInstance.Set(ctx, "benchkey", "test-value")
 
@@ -136,11 +137,13 @@ func BenchmarkCacheGet(b *testing.B) {
 
 func BenchmarkCacheSetGet(b *testing.B) {
 	ctx := context.Background()
-	cache.CacheInstance = &cache.GoCache{
-		Cache:  gocache.New(1*time.Hour, 2*time.Hour),
-		TTL:    1 * time.Hour,
-		Tracer: otel.Tracer("bench"),
-	}
+	
+	// Set up memory cache configuration
+	viper.Set("cache.type", "memory")
+	viper.Set("cache.expiration", "1h")
+	
+	// Initialize cache using new system
+	cache.CacheInit(ctx)
 
 	b.ReportAllocs()
 	b.ResetTimer()
@@ -256,11 +259,13 @@ func BenchmarkParseAndValidateGroups(b *testing.B) {
 }
 
 func BenchmarkMainRouteSimplePath(b *testing.B) {
-	cache.CacheInstance = &cache.GoCache{
-		Cache:  gocache.New(1*time.Hour, 2*time.Hour),
-		TTL:    1 * time.Hour,
-		Tracer: otel.Tracer("bench"),
-	}
+	// Set up memory cache configuration
+	viper.Set("cache.type", "memory")
+	viper.Set("cache.expiration", "1h")
+	
+	// Initialize cache using new system
+	ctx := context.Background()
+	cache.CacheInit(ctx)
 
 	testKey := generateBenchmarkKey()
 
@@ -295,11 +300,12 @@ func BenchmarkMainRouteSimplePath(b *testing.B) {
 func BenchmarkMainRouteCacheHit(b *testing.B) {
 	ctx := context.Background()
 
-	cache.CacheInstance = &cache.GoCache{
-		Cache:  gocache.New(1*time.Hour, 2*time.Hour),
-		TTL:    1 * time.Hour,
-		Tracer: otel.Tracer("bench"),
-	}
+	// Set up memory cache configuration
+	viper.Set("cache.type", "memory")
+	viper.Set("cache.expiration", "1h")
+	
+	// Initialize cache using new system
+	cache.CacheInit(ctx)
 
 	testKey := generateBenchmarkKey()
 

@@ -28,11 +28,11 @@ func TestInitElasticClient_Success(t *testing.T) {
 	}))
 	defer server.Close()
 
-	err := initElasticClient(ctx, server.URL, "user", "password")
+	err := initElasticClient(ctx, []string{server.URL}, "user", "password")
 
 	assert.NoError(t, err)
 	assert.NotNil(t, elasticsearchConnectionDetails)
-	assert.Equal(t, server.URL, elasticsearchConnectionDetails.URL)
+	assert.Equal(t, []string{server.URL}, elasticsearchConnectionDetails.Hosts)
 	assert.Equal(t, "user", elasticsearchConnectionDetails.Username)
 	assert.Equal(t, "password", elasticsearchConnectionDetails.Password)
 }
@@ -40,7 +40,7 @@ func TestInitElasticClient_Success(t *testing.T) {
 func TestInitElasticClient_ConnectionRefused(t *testing.T) {
 	ctx := context.Background()
 
-	err := initElasticClient(ctx, "http://localhost:99999", "user", "password")
+	err := initElasticClient(ctx, []string{"http://localhost:99999"}, "user", "password")
 
 	assert.Error(t, err)
 }
@@ -54,28 +54,127 @@ func TestInitElasticClient_InvalidResponse(t *testing.T) {
 	}))
 	defer server.Close()
 
-	err := initElasticClient(ctx, server.URL, "user", "password")
+	err := initElasticClient(ctx, []string{server.URL}, "user", "password")
 
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "failed to decode Elasticsearch response")
+	assert.Contains(t, err.Error(), "failed to decode response")
 }
 
 func TestInitElasticClient_InvalidURL(t *testing.T) {
 	ctx := context.Background()
 
-	err := initElasticClient(ctx, "ht!tp://invalid", "user", "password")
+	err := initElasticClient(ctx, []string{"ht!tp://invalid"}, "user", "password")
 
 	assert.Error(t, err)
 }
 
-func TestUpsertUser_Success(t *testing.T) {
+func TestInitElasticClient_MultipleEndpoints_AllSucceed(t *testing.T) {
 	ctx := context.Background()
 
+	// Create two test servers
+	server1 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		response := map[string]interface{}{
+			"name":         "elasticsearch-1",
+			"cluster_name": "elasticsearch",
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(response)
+	}))
+	defer server1.Close()
+
+	server2 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		response := map[string]interface{}{
+			"name":         "elasticsearch-2",
+			"cluster_name": "elasticsearch",
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(response)
+	}))
+	defer server2.Close()
+
+	err := initElasticClient(ctx, []string{server1.URL, server2.URL}, "user", "password")
+
+	assert.NoError(t, err)
+	assert.Equal(t, []string{server1.URL, server2.URL}, elasticsearchConnectionDetails.Hosts)
+}
+
+func TestInitElasticClient_MultipleEndpoints_SomeSucceed(t *testing.T) {
+	ctx := context.Background()
+
+	// Create one working server
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		response := map[string]interface{}{
+			"name":         "elasticsearch",
+			"cluster_name": "elasticsearch",
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(response)
+	}))
+	defer server.Close()
+
+	// Mix working and non-working endpoints
+	err := initElasticClient(ctx, []string{"http://localhost:99999", server.URL}, "user", "password")
+
+	assert.NoError(t, err) // Should succeed because at least one endpoint works
+	assert.Equal(t, []string{"http://localhost:99999", server.URL}, elasticsearchConnectionDetails.Hosts)
+}
+
+func TestInitElasticClient_MultipleEndpoints_AllFail(t *testing.T) {
+	ctx := context.Background()
+
+	err := initElasticClient(ctx, []string{"http://localhost:99999", "http://localhost:99998"}, "user", "password")
+
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to connect to any Elasticsearch endpoint")
+}
+
+func TestInitElasticClient_EmptyHosts(t *testing.T) {
+	ctx := context.Background()
+
+	err := initElasticClient(ctx, []string{}, "user", "password")
+
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "no Elasticsearch hosts provided")
+}
+
+func TestUpsertUser_MultipleEndpoints_Failover(t *testing.T) {
+	ctx := context.Background()
+
+	// First server fails, second succeeds
+	server2 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "POST", r.Method)
+		assert.Contains(t, r.URL.Path, "/_security/user/")
+
+		response := map[string]interface{}{
+			"created": true,
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(response)
+	}))
+	defer server2.Close()
+
+	// Set up connection details with failing first endpoint
 	elasticsearchConnectionDetails = ElasticsearchConnectionDetails{
-		URL:      "http://elasticsearch:9200",
+		Hosts:    []string{"http://localhost:99999", server2.URL},
 		Username: "user",
 		Password: "password",
 	}
+
+	user := ElasticsearchUser{
+		Password: "testpass",
+		Enabled:  true,
+		Email:    "test@example.com",
+		FullName: "Test User",
+		Roles:    []string{"kibana_user"},
+	}
+
+	err := UpsertUser(ctx, "testuser", user)
+
+	assert.NoError(t, err) // Should succeed with failover
+}
+
+func TestUpsertUser_Success(t *testing.T) {
+	ctx := context.Background()
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "POST", r.Method)
@@ -99,7 +198,11 @@ func TestUpsertUser_Success(t *testing.T) {
 	}))
 	defer server.Close()
 
-	elasticsearchConnectionDetails.URL = server.URL
+	elasticsearchConnectionDetails = ElasticsearchConnectionDetails{
+		Hosts:    []string{server.URL},
+		Username: "user",
+		Password: "password",
+	}
 
 	user := ElasticsearchUser{
 		Enabled:  true,
@@ -120,12 +223,6 @@ func TestUpsertUser_Success(t *testing.T) {
 func TestUpsertUser_InvalidJSON(t *testing.T) {
 	ctx := context.Background()
 
-	elasticsearchConnectionDetails = ElasticsearchConnectionDetails{
-		URL:      "http://elasticsearch:9200",
-		Username: "user",
-		Password: "password",
-	}
-
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		w.Header().Set("Content-Type", "application/json")
@@ -133,7 +230,11 @@ func TestUpsertUser_InvalidJSON(t *testing.T) {
 	}))
 	defer server.Close()
 
-	elasticsearchConnectionDetails.URL = server.URL
+	elasticsearchConnectionDetails = ElasticsearchConnectionDetails{
+		Hosts:    []string{server.URL},
+		Username: "user",
+		Password: "password",
+	}
 
 	user := ElasticsearchUser{
 		Enabled:  true,
@@ -146,17 +247,11 @@ func TestUpsertUser_InvalidJSON(t *testing.T) {
 	err := UpsertUser(ctx, "testuser", user)
 
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "failed to decode Elasticsearch response")
+	assert.Contains(t, err.Error(), "failed to decode response")
 }
 
 func TestUpsertUser_HTTPError(t *testing.T) {
 	ctx := context.Background()
-
-	elasticsearchConnectionDetails = ElasticsearchConnectionDetails{
-		URL:      "http://elasticsearch:9200",
-		Username: "user",
-		Password: "password",
-	}
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
@@ -165,7 +260,11 @@ func TestUpsertUser_HTTPError(t *testing.T) {
 	}))
 	defer server.Close()
 
-	elasticsearchConnectionDetails.URL = server.URL
+	elasticsearchConnectionDetails = ElasticsearchConnectionDetails{
+		Hosts:    []string{server.URL},
+		Username: "user",
+		Password: "password",
+	}
 
 	user := ElasticsearchUser{
 		Enabled:  true,
@@ -178,14 +277,15 @@ func TestUpsertUser_HTTPError(t *testing.T) {
 	err := UpsertUser(ctx, "testuser", user)
 
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "request failed with status 500")
+	assert.Contains(t, err.Error(), "request to")
+	assert.Contains(t, err.Error(), "failed with status 500")
 }
 
 func TestUpsertUser_NetworkError(t *testing.T) {
 	ctx := context.Background()
 
 	elasticsearchConnectionDetails = ElasticsearchConnectionDetails{
-		URL:      "http://localhost:99999",
+		Hosts:    []string{"http://localhost:99999"},
 		Username: "user",
 		Password: "password",
 	}
@@ -201,16 +301,11 @@ func TestUpsertUser_NetworkError(t *testing.T) {
 	err := UpsertUser(ctx, "testuser", user)
 
 	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to upsert user")
 }
 
 func TestUpsertUser_WithAllMetadata(t *testing.T) {
 	ctx := context.Background()
-
-	elasticsearchConnectionDetails = ElasticsearchConnectionDetails{
-		URL:      "http://elasticsearch:9200",
-		Username: "user",
-		Password: "password",
-	}
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "POST", r.Method)
@@ -230,7 +325,11 @@ func TestUpsertUser_WithAllMetadata(t *testing.T) {
 	}))
 	defer server.Close()
 
-	elasticsearchConnectionDetails.URL = server.URL
+	elasticsearchConnectionDetails = ElasticsearchConnectionDetails{
+		Hosts:    []string{server.URL},
+		Username: "user",
+		Password: "password",
+	}
 
 	user := ElasticsearchUser{
 		Enabled:  true,
@@ -251,12 +350,6 @@ func TestUpsertUser_WithAllMetadata(t *testing.T) {
 func TestUpsertUser_EmptyEmail(t *testing.T) {
 	ctx := context.Background()
 
-	elasticsearchConnectionDetails = ElasticsearchConnectionDetails{
-		URL:      "http://elasticsearch:9200",
-		Username: "user",
-		Password: "password",
-	}
-
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		w.Header().Set("Content-Type", "application/json")
@@ -264,7 +357,11 @@ func TestUpsertUser_EmptyEmail(t *testing.T) {
 	}))
 	defer server.Close()
 
-	elasticsearchConnectionDetails.URL = server.URL
+	elasticsearchConnectionDetails = ElasticsearchConnectionDetails{
+		Hosts:    []string{server.URL},
+		Username: "user",
+		Password: "password",
+	}
 
 	user := ElasticsearchUser{
 		Enabled:  true,
@@ -282,12 +379,6 @@ func TestUpsertUser_EmptyEmail(t *testing.T) {
 func TestUpsertUser_ForbiddenStatus(t *testing.T) {
 	ctx := context.Background()
 
-	elasticsearchConnectionDetails = ElasticsearchConnectionDetails{
-		URL:      "http://elasticsearch:9200",
-		Username: "user",
-		Password: "password",
-	}
-
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
 		w.Header().Set("Content-Type", "application/json")
@@ -295,7 +386,11 @@ func TestUpsertUser_ForbiddenStatus(t *testing.T) {
 	}))
 	defer server.Close()
 
-	elasticsearchConnectionDetails.URL = server.URL
+	elasticsearchConnectionDetails = ElasticsearchConnectionDetails{
+		Hosts:    []string{server.URL},
+		Username: "user",
+		Password: "password",
+	}
 
 	user := ElasticsearchUser{
 		Enabled:  true,
@@ -308,7 +403,7 @@ func TestUpsertUser_ForbiddenStatus(t *testing.T) {
 	err := UpsertUser(ctx, "testuser", user)
 
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "request failed with status 403")
+	assert.Contains(t, err.Error(), "failed with status 403")
 }
 
 func TestBasicAuth(t *testing.T) {
@@ -379,12 +474,6 @@ func TestElasticsearchUserMarshaling(t *testing.T) {
 func TestUpsertUser_SpecialCharactersInUsername(t *testing.T) {
 	ctx := context.Background()
 
-	elasticsearchConnectionDetails = ElasticsearchConnectionDetails{
-		URL:      "http://elasticsearch:9200",
-		Username: "user",
-		Password: "password",
-	}
-
 	capturedUsername := ""
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -396,7 +485,11 @@ func TestUpsertUser_SpecialCharactersInUsername(t *testing.T) {
 	}))
 	defer server.Close()
 
-	elasticsearchConnectionDetails.URL = server.URL
+	elasticsearchConnectionDetails = ElasticsearchConnectionDetails{
+		Hosts:    []string{server.URL},
+		Username: "user",
+		Password: "password",
+	}
 
 	user := ElasticsearchUser{
 		Enabled:  true,

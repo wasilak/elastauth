@@ -1,0 +1,170 @@
+---
+title: Welcome to elastauth
+description: A stateless authentication proxy for Elasticsearch and Kibana with pluggable authentication providers.
+---
+
+elastauth is a stateless authentication proxy that sits between your users and Elasticsearch/Kibana, providing seamless authentication through pluggable providers.
+
+## Key Features
+
+- **Pluggable Authentication**: Support for multiple authentication providers (Authelia, OAuth2/OIDC)
+- **Stateless Design**: No persistent authentication state, perfect for horizontal scaling
+- **Elasticsearch Integration**: Automatic user management and role mapping
+- **Flexible Caching**: Support for Redis, memory, and file-based caching
+- **Production Ready**: Kubernetes-ready with health checks and graceful shutdown
+
+## Quick Start
+
+Get started with elastauth in minutes:
+
+### 1. Choose Your Authentication Provider
+- **[Authelia](/elastauth/providers/authelia)** - If you're using Authelia for authentication
+- **[OAuth2/OIDC](/elastauth/providers/oidc)** - For Keycloak, Casdoor, Authentik, Auth0, Azure AD, and others
+
+### 2. Configure elastauth
+```yaml
+# Basic configuration example
+auth_provider: "oidc"  # or "authelia"
+
+oidc:
+  issuer: "https://your-auth-provider.com"
+  client_id: "elastauth"
+  client_secret: "${OIDC_CLIENT_SECRET}"
+
+cache:
+  type: "redis"  # or "memory" for single instance
+  redis_host: "redis:6379"
+
+elasticsearch:
+  hosts: ["https://elasticsearch:9200"]
+  username: "elastauth"
+  password: "${ELASTICSEARCH_PASSWORD}"
+```
+
+### 3. Deploy elastauth
+Deploy elastauth using Docker, Kubernetes, or as a binary. See the main README for deployment instructions.
+
+### 4. Test Your Setup
+```bash
+# Test authentication endpoint
+curl -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+     http://elastauth:5000/
+
+# Use returned authorization header with Elasticsearch
+curl -H "Authorization: Basic base64encodedcreds" \
+     https://elasticsearch:9200/_cluster/health
+```
+
+## Architecture Overview
+
+elastauth uses a pluggable architecture that supports multiple authentication providers while maintaining a stateless design perfect for horizontal scaling.
+
+```mermaid
+graph TB
+    subgraph "Client Layer"
+        U[Users/Applications]
+        K[Kibana Dashboard]
+        API[API Clients]
+    end
+    
+    subgraph "Authentication Layer"
+        A[Authelia]
+        KC[Keycloak]
+        CD[Casdoor]
+        AT[Authentik]
+        A0[Auth0]
+        AZ[Azure AD]
+    end
+    
+    subgraph "elastauth Proxy"
+        EA[elastauth Instance 1]
+        EB[elastauth Instance 2]
+        EC[elastauth Instance N]
+    end
+    
+    subgraph "Storage Layer"
+        RC[Redis Cache]
+        ES[Elasticsearch Cluster]
+    end
+    
+    U --> EA
+    K --> EB
+    API --> EC
+    
+    A -.-> EA
+    KC -.-> EA
+    CD -.-> EB
+    AT -.-> EB
+    A0 -.-> EC
+    AZ -.-> EC
+    
+    EA --> RC
+    EB --> RC
+    EC --> RC
+    
+    EA --> ES
+    EB --> ES
+    EC --> ES
+```
+
+### Authentication Flow
+
+```mermaid
+sequenceDiagram
+    participant C as Client
+    participant E as elastauth
+    participant P as Auth Provider
+    participant R as Redis Cache
+    participant ES as Elasticsearch
+    
+    Note over C,ES: Authentication Request Flow
+    
+    C->>E: Request with Auth Info
+    E->>P: Validate & Extract User
+    P-->>E: User Information
+    
+    E->>R: Check Cached Credentials
+    alt Cache Hit
+        R-->>E: Encrypted Credentials
+        Note over E: Decrypt & Return
+    else Cache Miss
+        E->>ES: Create/Update User
+        ES-->>E: User Account Ready
+        E->>R: Cache Encrypted Credentials
+    end
+    
+    E-->>C: Authorization Header
+    
+    Note over C,ES: Elasticsearch Access
+    C->>ES: Request with Auth Header
+    ES-->>C: Data Response
+```
+
+## Supported Providers
+
+elastauth supports a wide range of authentication providers:
+
+- **[Authelia](/elastauth/providers/authelia)**: Header-based authentication
+- **[OAuth2/OIDC](/elastauth/providers/oidc)**: Generic OAuth2/OIDC support for:
+  - Keycloak
+  - Authentik  
+  - Casdoor
+  - Auth0
+  - Azure AD
+  - And many more...
+
+## Next Steps
+
+### 📚 Learn the Fundamentals
+- **[Core Concepts](/elastauth/getting-started/concepts)** - Understand elastauth's architecture and principles
+
+### 🔧 Configure Authentication
+- **[Authentication Providers](/elastauth/providers/)** - Choose and configure your auth system
+  - [Authelia Provider](/elastauth/providers/authelia) - Header-based authentication
+  - [OAuth2/OIDC Provider](/elastauth/providers/oidc) - JWT token authentication
+- **[Cache Configuration](/elastauth/cache/)** - Optimize performance with caching
+  - [Redis Cache](/elastauth/cache/redis) - Distributed caching for scaling
+
+### 🔍 Operations & Troubleshooting
+- **[Troubleshooting Guide](/elastauth/guides/troubleshooting)** - Common issues and solutions
+- **[Upgrading](/elastauth/guides/upgrading)** - Version upgrade procedures

@@ -9,6 +9,7 @@ import (
 
 	"log/slog"
 
+	"github.com/spf13/viper"
 	"go.opentelemetry.io/otel"
 )
 
@@ -22,7 +23,7 @@ var client *http.Client
 // ElasticsearchConnectionDetails holds the connection configuration for an Elasticsearch cluster.
 // It includes the cluster URL, username, and password required for authentication.
 type ElasticsearchConnectionDetails struct {
-	URL      string
+	Hosts    []string
 	Username string
 	Password string
 }
@@ -52,39 +53,76 @@ var elasticsearchConnectionDetails ElasticsearchConnectionDetails
 
 // The function initializes an Elasticsearch client with connection details and sends a GET request to
 // the Elasticsearch URL with basic authentication.
-func initElasticClient(ctx context.Context, url, user, pass string) error {
+func initElasticClient(ctx context.Context, hosts []string, user, pass string) error {
 	_, span := tracerElastic.Start(ctx, "initElasticClient")
 	defer span.End()
+
+	if len(hosts) == 0 {
+		return fmt.Errorf("no Elasticsearch hosts provided")
+	}
 
 	client = &http.Client{}
 
 	elasticsearchConnectionDetails = ElasticsearchConnectionDetails{
-		URL:      url,
+		Hosts:    hosts,
 		Username: user,
 		Password: pass,
 	}
 
-	req, err := http.NewRequest("GET", elasticsearchConnectionDetails.URL, nil)
-	if err != nil {
-		return err
+	// Validate all endpoints have the same credentials and are accessible
+	var lastErr error
+	successfulHosts := 0
+
+	for i, host := range hosts {
+		slog.DebugContext(ctx, "Testing Elasticsearch endpoint", slog.String("host", host), slog.Int("index", i))
+		
+		req, err := http.NewRequest("GET", host, nil)
+		if err != nil {
+			slog.WarnContext(ctx, "Failed to create request for Elasticsearch endpoint", 
+				slog.String("host", host), slog.String("error", err.Error()))
+			lastErr = err
+			continue
+		}
+
+		req.Header.Add("Authorization", "Basic "+basicAuth(user, pass))
+		resp, err := client.Do(req)
+		if err != nil {
+			slog.WarnContext(ctx, "Failed to connect to Elasticsearch endpoint", 
+				slog.String("host", host), slog.String("error", err.Error()))
+			lastErr = err
+			continue
+		}
+
+		defer resp.Body.Close()
+
+		if resp.StatusCode != 200 {
+			slog.WarnContext(ctx, "Elasticsearch endpoint returned non-200 status", 
+				slog.String("host", host), slog.Int("status", resp.StatusCode))
+			lastErr = fmt.Errorf("endpoint %s returned status %d", host, resp.StatusCode)
+			continue
+		}
+
+		body := map[string]interface{}{}
+		err = json.NewDecoder(resp.Body).Decode(&body)
+		if err != nil {
+			slog.WarnContext(ctx, "Failed to decode Elasticsearch response", 
+				slog.String("host", host), slog.String("error", err.Error()))
+			lastErr = fmt.Errorf("failed to decode response from %s: %w", host, err)
+			continue
+		}
+
+		slog.DebugContext(ctx, "Successfully connected to Elasticsearch endpoint", 
+			slog.String("host", host), slog.Any("response", SanitizeForLogging(body)))
+		successfulHosts++
 	}
 
-	req.Header.Add("Authorization", "Basic "+basicAuth(elasticsearchConnectionDetails.Username, elasticsearchConnectionDetails.Password))
-	resp, err := client.Do(req)
-	if err != nil {
-		return err
+	if successfulHosts == 0 {
+		return fmt.Errorf("failed to connect to any Elasticsearch endpoint, last error: %w", lastErr)
 	}
 
-	defer resp.Body.Close()
-
-	body := map[string]interface{}{}
-
-	err = json.NewDecoder(resp.Body).Decode(&body)
-	if err != nil {
-		return fmt.Errorf("failed to decode Elasticsearch response: %w", err)
-	}
-
-	slog.DebugContext(ctx, "Request response", slog.Any("body", SanitizeForLogging(body)))
+	slog.InfoContext(ctx, "Elasticsearch client initialized", 
+		slog.Int("total_hosts", len(hosts)), 
+		slog.Int("successful_hosts", successfulHosts))
 
 	return nil
 }
@@ -98,40 +136,126 @@ func UpsertUser(ctx context.Context, username string, elasticsearchUser Elastics
 
 	client = &http.Client{}
 
-	url := fmt.Sprintf("%s/_security/user/%s", elasticsearchConnectionDetails.URL, username)
+	var lastErr error
+	
+	// Try each Elasticsearch endpoint until one succeeds
+	for i, host := range elasticsearchConnectionDetails.Hosts {
+		slog.DebugContext(ctx, "Attempting to upsert user", 
+			slog.String("username", username), 
+			slog.String("host", host), 
+			slog.Int("attempt", i+1))
 
-	jsonPayload, err := json.Marshal(elasticsearchUser)
-	if err != nil {
-		return err
+		url := fmt.Sprintf("%s/_security/user/%s", host, username)
+
+		jsonPayload, err := json.Marshal(elasticsearchUser)
+		if err != nil {
+			return fmt.Errorf("failed to marshal user data: %w", err)
+		}
+
+		req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonPayload))
+		if err != nil {
+			slog.WarnContext(ctx, "Failed to create request for Elasticsearch endpoint", 
+				slog.String("host", host), slog.String("error", err.Error()))
+			lastErr = err
+			continue
+		}
+
+		req.Header.Add("Authorization", "Basic "+basicAuth(elasticsearchConnectionDetails.Username, elasticsearchConnectionDetails.Password))
+		req.Header.Add("Content-Type", "application/json")
+		
+		resp, err := client.Do(req)
+		if err != nil {
+			slog.WarnContext(ctx, "Failed to connect to Elasticsearch endpoint for user upsert", 
+				slog.String("host", host), slog.String("username", username), slog.String("error", err.Error()))
+			lastErr = err
+			continue
+		}
+
+		defer resp.Body.Close()
+
+		body := map[string]interface{}{}
+		err = json.NewDecoder(resp.Body).Decode(&body)
+		if err != nil {
+			slog.WarnContext(ctx, "Failed to decode Elasticsearch response", 
+				slog.String("host", host), slog.String("username", username), slog.String("error", err.Error()))
+			lastErr = fmt.Errorf("failed to decode response from %s: %w", host, err)
+			continue
+		}
+
+		if resp.StatusCode != 200 {
+			slog.WarnContext(ctx, "Elasticsearch endpoint returned error for user upsert", 
+				slog.String("host", host), 
+				slog.String("username", username), 
+				slog.Int("status", resp.StatusCode),
+				slog.Any("response", SanitizeForLogging(body)))
+			lastErr = fmt.Errorf("request to %s failed with status %d: %+v", host, resp.StatusCode, body)
+			continue
+		}
+
+		slog.DebugContext(ctx, "Successfully upserted user", 
+			slog.String("username", username), 
+			slog.String("host", host),
+			slog.Any("response", SanitizeForLogging(body)))
+
+		return nil
 	}
 
-	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonPayload))
-	if err != nil {
-		return err
+	// If we get here, all endpoints failed
+	return fmt.Errorf("failed to upsert user %s to any Elasticsearch endpoint, last error: %w", username, lastErr)
+}
+
+// GetElasticsearchHosts returns the list of Elasticsearch hosts from configuration
+// Supports both new multi-endpoint format and legacy single host format
+func GetElasticsearchHosts() []string {
+	// Try new format first
+	hosts := viper.GetStringSlice("elasticsearch.hosts")
+	if len(hosts) > 0 {
+		return hosts
 	}
 
-	req.Header.Add("Authorization", "Basic "+basicAuth(elasticsearchConnectionDetails.Username, elasticsearchConnectionDetails.Password))
-	req.Header.Add("Content-Type", "application/json")
-	resp, err := client.Do(req)
-
-	if err != nil {
-		return err
+	// Fall back to legacy format
+	legacyHost := viper.GetString("elasticsearch_host")
+	if legacyHost != "" {
+		return []string{legacyHost}
 	}
 
-	defer resp.Body.Close()
+	return []string{}
+}
 
-	body := map[string]interface{}{}
-
-	err = json.NewDecoder(resp.Body).Decode(&body)
-	if err != nil {
-		return fmt.Errorf("failed to decode Elasticsearch response: %w", err)
+// GetElasticsearchUsername returns the Elasticsearch username from configuration
+// Supports both new and legacy configuration formats
+func GetElasticsearchUsername() string {
+	// Try new format first
+	username := viper.GetString("elasticsearch.username")
+	if username != "" {
+		return username
 	}
 
-	if resp.StatusCode != 200 {
-		return fmt.Errorf("request failed with status %d: %+v", resp.StatusCode, body)
+	// Fall back to legacy format
+	return viper.GetString("elasticsearch_username")
+}
+
+// GetElasticsearchPassword returns the Elasticsearch password from configuration
+// Supports both new and legacy configuration formats
+func GetElasticsearchPassword() string {
+	// Try new format first
+	password := viper.GetString("elasticsearch.password")
+	if password != "" {
+		return password
 	}
 
-	slog.DebugContext(ctx, "Request response", slog.Any("body", SanitizeForLogging(body)))
+	// Fall back to legacy format
+	return viper.GetString("elasticsearch_password")
+}
 
-	return nil
+// GetElasticsearchDryRun returns the Elasticsearch dry run setting from configuration
+// Supports both new and legacy configuration formats
+func GetElasticsearchDryRun() bool {
+	// Try new format first
+	if viper.IsSet("elasticsearch.dry_run") {
+		return viper.GetBool("elasticsearch.dry_run")
+	}
+
+	// Fall back to legacy format
+	return viper.GetBool("elasticsearch_dry_run")
 }

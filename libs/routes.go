@@ -1,18 +1,27 @@
 package libs
 
 import (
+	"context"
 	"encoding/base64"
-	"errors"
 	"log/slog"
 	"net/http"
+	"os"
+	"strings"
+	"time"
 
 	"github.com/labstack/echo/v4"
 	"github.com/spf13/viper"
 	"github.com/wasilak/elastauth/cache"
+	"github.com/wasilak/elastauth/provider"
+	_ "github.com/wasilak/elastauth/provider/authelia" // Import to register Authelia provider
+	_ "github.com/wasilak/elastauth/provider/oidc"     // Import to register OIDC provider
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 )
+
+// startTime records when the application started
+var startTime = time.Now()
 
 // The HealthResponse type is a struct in Go that contains a single field called Status, which is a
 // string that will be represented as "status" in JSON.
@@ -23,15 +32,100 @@ type HealthResponse struct {
 	Status string `json:"status"`
 }
 
-// The type `ErrorResponse` is a struct that contains a message and code for error responses in Go.
+// ReadinessResponse represents the response for readiness probe
+type ReadinessResponse struct {
+	Status       string                 `json:"status"`
+	Checks       map[string]CheckResult `json:"checks"`
+	Timestamp    string                 `json:"timestamp"`
+	Version      string                 `json:"version,omitempty"`
+}
+
+// LivenessResponse represents the response for liveness probe
+type LivenessResponse struct {
+	Status    string `json:"status"`
+	Timestamp string `json:"timestamp"`
+	Uptime    string `json:"uptime"`
+}
+
+// CheckResult represents the result of a health check
+type CheckResult struct {
+	Status  string `json:"status"`
+	Message string `json:"message,omitempty"`
+	Error   string `json:"error,omitempty"`
+}
+
+// AuthSuccess represents a successful authentication response
+type AuthSuccess struct {
+	Status string `json:"status"`
+	User   string `json:"user"`
+}
+
+// The type `ErrorResponse` is a struct that contains a message, code, and timestamp for error responses in Go.
 // @property {string} Message - Message is a string property that represents the error message that
 // will be returned in the response when an error occurs.
 // @property {int} Code - The `Code` property is an integer that represents an error code. It is used
 // to identify the type of error that occurred. For example, a code of 404 might indicate that a
 // requested resource was not found, while a code of 500 might indicate a server error.
+// @property {time.Time} Timestamp - The timestamp when the error occurred.
 type ErrorResponse struct {
-	Message string `json:"message"`
-	Code    int    `json:"code"`
+	Message   string    `json:"message"`
+	Code      int       `json:"code"`
+	Timestamp time.Time `json:"timestamp"`
+}
+
+// NewErrorResponse creates a new ErrorResponse with the current timestamp
+func NewErrorResponse(message string, code int) ErrorResponse {
+	return ErrorResponse{
+		Message:   message,
+		Code:      code,
+		Timestamp: time.Now().UTC(),
+	}
+}
+
+// isCacheEnabled returns true if caching is enabled and available.
+func isCacheEnabled() bool {
+	return cache.CacheInstance != nil
+}
+
+// getCachedItem retrieves an item from cache if caching is enabled.
+// Returns the item and whether it exists.
+func getCachedItem(ctx context.Context, cacheKey string) (interface{}, bool) {
+	if !isCacheEnabled() {
+		return nil, false
+	}
+	return cache.CacheInstance.Get(ctx, cacheKey)
+}
+
+// setCachedItem stores an item in cache if caching is enabled.
+func setCachedItem(ctx context.Context, cacheKey string, item interface{}) {
+	if !isCacheEnabled() {
+		return
+	}
+	cache.CacheInstance.Set(ctx, cacheKey, item)
+}
+
+// getCachedItemTTL returns the TTL of a cached item if caching is enabled.
+func getCachedItemTTL(ctx context.Context, cacheKey string) (time.Duration, bool) {
+	if !isCacheEnabled() {
+		return 0, false
+	}
+	return cache.CacheInstance.GetItemTTL(ctx, cacheKey)
+}
+
+// getCacheTTL returns the default cache TTL if caching is enabled.
+func getCacheTTL(ctx context.Context) time.Duration {
+	if !isCacheEnabled() {
+		return 0
+	}
+	return cache.CacheInstance.GetTTL(ctx)
+}
+
+// extendCachedItemTTL extends the TTL of a cached item if caching is enabled.
+func extendCachedItemTTL(ctx context.Context, cacheKey string, item interface{}) {
+	if !isCacheEnabled() {
+		return
+	}
+	cache.CacheInstance.ExtendTTL(ctx, cacheKey, item)
 }
 
 // The configResponse type contains default roles and group mappings in a map format.
@@ -44,67 +138,106 @@ type ErrorResponse struct {
 // the map represents a group, and the corresponding value is a slice of roles that are associated with
 // that
 type configResponse struct {
-	DefaultRoles  []string            `json:"default_roles"`
-	GroupMappings map[string][]string `json:"group_mappings"`
+	AuthProvider    string                 `json:"auth_provider"`
+	Cache           map[string]interface{} `json:"cache"`
+	Elasticsearch   map[string]interface{} `json:"elasticsearch"`
+	DefaultRoles    []string               `json:"default_roles"`
+	GroupMappings   map[string][]string    `json:"group_mappings"`
+	ProviderConfig  map[string]interface{} `json:"provider_config"`
 }
 
 // MainRoute is the main authentication handler that processes user authentication requests.
 // It extracts user information from request headers, validates input, generates temporary passwords,
 // optionally upserts the user to Elasticsearch, caches encrypted passwords, and returns basic auth credentials.
 // The route supports caching to improve performance on repeated requests for the same user.
+// getAuthProvider returns the configured authentication provider
+// For Phase 1, this defaults to "authelia" for backward compatibility
+func getAuthProvider() (provider.AuthProvider, error) {
+	// For backward compatibility, default to "authelia" provider
+	providerType := viper.GetString("auth_provider")
+	if providerType == "" {
+		providerType = "authelia"
+	}
+	
+	authProvider, err := provider.DefaultFactory.Create(providerType, nil)
+	if err != nil {
+		return nil, err
+	}
+	
+	return authProvider, nil
+}
+
 func MainRoute(c echo.Context) error {
 	tracer := otel.Tracer("MainRoute")
 
 	ctx, spanHeader := tracer.Start(c.Request().Context(), "Getting user information from request")
 
-	spanHeader.AddEvent("Getting username from header")
-	headerName := viper.GetString("headers_username")
-	user := c.Request().Header.Get(headerName)
-
-	if len(user) == 0 {
-		err := errors.New("Header not provided: " + headerName)
-		slog.ErrorContext(ctx, err.Error())
+	spanHeader.AddEvent("Getting auth provider")
+	authProvider, err := getAuthProvider()
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to get auth provider", slog.String("error", err.Error()))
 		spanHeader.RecordError(err)
 		spanHeader.SetStatus(codes.Error, err.Error())
-		response := ErrorResponse{
-			Message: err.Error(),
-			Code:    http.StatusBadRequest,
-		}
+		response := NewErrorResponse("Internal server error", http.StatusInternalServerError)
+		return c.JSON(http.StatusInternalServerError, response)
+	}
+
+	spanHeader.AddEvent("Extracting user information from provider")
+	authRequest := &provider.AuthRequest{Request: c.Request()}
+	userInfo, err := authProvider.GetUser(ctx, authRequest)
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to get user from provider", slog.String("error", err.Error()))
+		spanHeader.RecordError(err)
+		spanHeader.SetStatus(codes.Error, err.Error())
+		response := NewErrorResponse(err.Error(), http.StatusBadRequest)
 		return c.JSON(http.StatusBadRequest, response)
 	}
 
+	user := userInfo.Username
 	if err := ValidateUsername(user); err != nil {
 		slog.ErrorContext(ctx, "Invalid username format", slog.String("error", err.Error()))
 		spanHeader.RecordError(err)
 		spanHeader.SetStatus(codes.Error, err.Error())
-		response := ErrorResponse{
-			Message: err.Error(),
-			Code:    http.StatusBadRequest,
-		}
+		response := NewErrorResponse(err.Error(), http.StatusBadRequest)
 		return c.JSON(http.StatusBadRequest, response)
 	}
 	spanHeader.End()
 
-	headerName = viper.GetString("headers_groups")
-	groupsHeader := c.Request().Header.Get(headerName)
+	// Validate groups using existing validation logic
 	enableGroupWhitelist := viper.GetBool("enable_group_whitelist")
 	var groupWhitelist []string
 	if enableGroupWhitelist {
 		groupWhitelist = viper.GetStringSlice("group_whitelist")
 	}
 
-	userGroups, err := ParseAndValidateGroups(groupsHeader, enableGroupWhitelist, groupWhitelist)
+	userGroups, err := ParseAndValidateGroups(strings.Join(userInfo.Groups, ","), enableGroupWhitelist, groupWhitelist)
 	if err != nil {
 		slog.ErrorContext(ctx, "Invalid group format", slog.String("error", err.Error()))
-		response := ErrorResponse{
-			Message: err.Error(),
-			Code:    http.StatusBadRequest,
-		}
+		response := NewErrorResponse(err.Error(), http.StatusBadRequest)
 		return c.JSON(http.StatusBadRequest, response)
 	}
 
-	if len(userGroups) == 0 && len(groupsHeader) == 0 {
-		slog.DebugContext(ctx, "No groups provided in header")
+	if len(userGroups) == 0 && len(userInfo.Groups) == 0 {
+		slog.DebugContext(ctx, "No groups provided by provider")
+	}
+
+	// Validate email and name from provider
+	userEmail := userInfo.Email
+	if len(userEmail) > 0 {
+		if err := ValidateEmail(userEmail); err != nil {
+			slog.ErrorContext(ctx, "Invalid email format", slog.String("error", err.Error()))
+			response := NewErrorResponse(err.Error(), http.StatusBadRequest)
+			return c.JSON(http.StatusBadRequest, response)
+		}
+	}
+
+	userName := userInfo.FullName
+	if len(userName) > 0 {
+		if err := ValidateName(userName); err != nil {
+			slog.ErrorContext(ctx, "Invalid name format", slog.String("error", err.Error()))
+			response := NewErrorResponse(err.Error(), http.StatusBadRequest)
+			return c.JSON(http.StatusBadRequest, response)
+		}
 	}
 
 	ctx, spanCacheGet := tracer.Start(ctx, "cache get")
@@ -115,7 +248,7 @@ func MainRoute(c echo.Context) error {
 	key := viper.GetString("secret_key")
 
 	spanCacheGet.AddEvent("Getting password from cache")
-	encryptedPasswordBase64, exists := cache.CacheInstance.Get(ctx, cacheKey)
+	encryptedPasswordBase64, exists := getCachedItem(ctx, cacheKey)
 
 	if exists {
 		slog.DebugContext(ctx, "Cache hit", slog.String("cacheKey", cacheKey))
@@ -128,30 +261,6 @@ func MainRoute(c echo.Context) error {
 		ctx, spanCacheMiss := tracer.Start(ctx, "user access regeneration")
 
 		roles := GetUserRoles(ctx, userGroups)
-
-		userEmail := c.Request().Header.Get(viper.GetString("headers_email"))
-		if len(userEmail) > 0 {
-			if err := ValidateEmail(userEmail); err != nil {
-				slog.ErrorContext(ctx, "Invalid email format", slog.String("error", err.Error()))
-				response := ErrorResponse{
-					Message: err.Error(),
-					Code:    http.StatusBadRequest,
-				}
-				return c.JSON(http.StatusBadRequest, response)
-			}
-		}
-
-		userName := c.Request().Header.Get(viper.GetString("headers_name"))
-		if len(userName) > 0 {
-			if err := ValidateName(userName); err != nil {
-				slog.ErrorContext(ctx, "Invalid name format", slog.String("error", err.Error()))
-				response := ErrorResponse{
-					Message: err.Error(),
-					Code:    http.StatusBadRequest,
-				}
-				return c.JSON(http.StatusBadRequest, response)
-			}
-		}
 
 		spanCacheMiss.SetAttributes(attribute.String("userEmail", userEmail))
 		spanCacheMiss.SetAttributes(attribute.String("userName", userName))
@@ -170,10 +279,7 @@ func MainRoute(c echo.Context) error {
 		encryptedPassword, err := Encrypt(ctx, password, key)
 		if err != nil {
 			slog.ErrorContext(ctx, "Failed to encrypt password", slog.Any("error", SanitizeForLogging(err)))
-			return c.JSON(http.StatusInternalServerError, ErrorResponse{
-				Message: "Internal server error",
-				Code:    http.StatusInternalServerError,
-			})
+			return c.JSON(http.StatusInternalServerError, NewErrorResponse("Internal server error", http.StatusInternalServerError))
 		}
 		encryptedPasswordBase64 = string(base64.URLEncoding.EncodeToString([]byte(encryptedPassword)))
 
@@ -190,45 +296,45 @@ func MainRoute(c echo.Context) error {
 			Metadata: elasticsearchUserMetadata,
 		}
 
-		if !viper.GetBool("elasticsearch_dry_run") {
+		if !GetElasticsearchDryRun() {
+			hosts := GetElasticsearchHosts()
+			if len(hosts) == 0 {
+				slog.ErrorContext(ctx, "No Elasticsearch hosts configured")
+				return c.JSON(http.StatusInternalServerError, NewErrorResponse("Internal server error", http.StatusInternalServerError))
+			}
+
 			err := initElasticClient(
 				ctx,
-				viper.GetString("elasticsearch_host"),
-				viper.GetString("elasticsearch_username"),
-				viper.GetString("elasticsearch_password"),
+				hosts,
+				GetElasticsearchUsername(),
+				GetElasticsearchPassword(),
 			)
 			if err != nil {
 				slog.ErrorContext(ctx, "Failed to initialize Elasticsearch client", slog.Any("error", SanitizeForLogging(err)))
-				return c.JSON(http.StatusInternalServerError, ErrorResponse{
-					Message: "Internal server error",
-					Code:    http.StatusInternalServerError,
-				})
+				return c.JSON(http.StatusInternalServerError, NewErrorResponse("Internal server error", http.StatusInternalServerError))
 			}
 
 			spanCacheMiss.AddEvent("Upserting user in Elasticsearch")
 			err = UpsertUser(ctx, user, elasticsearchUser)
 			if err != nil {
 				slog.ErrorContext(ctx, "Failed to upsert user in Elasticsearch", slog.Any("error", SanitizeForLogging(err)))
-				return c.JSON(http.StatusInternalServerError, ErrorResponse{
-					Message: "Internal server error",
-					Code:    http.StatusInternalServerError,
-				})
+				return c.JSON(http.StatusInternalServerError, NewErrorResponse("Internal server error", http.StatusInternalServerError))
 			}
 		}
 
 		spanCacheMiss.AddEvent("Setting cache item")
-		cache.CacheInstance.Set(ctx, cacheKey, encryptedPasswordBase64)
+		setCachedItem(ctx, cacheKey, encryptedPasswordBase64)
 		spanCacheMiss.End()
 	}
 
 	ctx, spanItemCache := tracer.Start(ctx, "handling item cache")
 	spanItemCache.SetAttributes(attribute.String("cacheKey", cacheKey))
 
-	itemCacheDuration, _ := cache.CacheInstance.GetItemTTL(ctx, cacheKey)
+	itemCacheDuration, _ := getCachedItemTTL(ctx, cacheKey)
 
-	if viper.GetBool("extend_cache") && itemCacheDuration > 0 && itemCacheDuration < cache.CacheInstance.GetTTL(ctx) {
-		slog.DebugContext(ctx, "Extending cache TTL", slog.String("user", user), slog.Duration("currentTTL", itemCacheDuration), slog.String("configuredTTL", viper.GetString("cache_expire")))
-		cache.CacheInstance.ExtendTTL(ctx, cacheKey, encryptedPasswordBase64)
+	if viper.GetBool("extend_cache") && itemCacheDuration > 0 && itemCacheDuration < getCacheTTL(ctx) {
+		slog.DebugContext(ctx, "Extending cache TTL", slog.String("user", user), slog.Duration("currentTTL", itemCacheDuration), slog.String("configuredTTL", viper.GetString("cache.expiration")))
+		extendCachedItemTTL(ctx, cacheKey, encryptedPasswordBase64)
 	}
 	spanItemCache.End()
 
@@ -238,25 +344,23 @@ func MainRoute(c echo.Context) error {
 	decryptedPasswordBase64, err := base64.URLEncoding.DecodeString(encryptedPasswordBase64.(string))
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to decode password from cache", slog.Any("error", SanitizeForLogging(err)))
-		return c.JSON(http.StatusInternalServerError, ErrorResponse{
-			Message: "Internal server error",
-			Code:    http.StatusInternalServerError,
-		})
+		return c.JSON(http.StatusInternalServerError, NewErrorResponse("Internal server error", http.StatusInternalServerError))
 	}
 
 	decryptedPassword, err := Decrypt(ctx, string(decryptedPasswordBase64), key)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to decrypt password", slog.Any("error", SanitizeForLogging(err)))
-		return c.JSON(http.StatusInternalServerError, ErrorResponse{
-			Message: "Internal server error",
-			Code:    http.StatusInternalServerError,
-		})
+		return c.JSON(http.StatusInternalServerError, NewErrorResponse("Internal server error", http.StatusInternalServerError))
 	}
 	spanDecrypt.End()
 
 	c.Response().Header().Set(echo.HeaderAuthorization, "Basic "+basicAuth(user, decryptedPassword))
 
-	return c.NoContent(http.StatusOK)
+	response := AuthSuccess{
+		Status: "OK",
+		User:   user,
+	}
+	return c.JSON(http.StatusOK, response)
 }
 
 // HealthRoute responds to health checks with a JSON response containing the application status.
@@ -273,6 +377,179 @@ func HealthRoute(c echo.Context) error {
 	return c.JSON(http.StatusOK, response)
 }
 
+// ReadinessRoute responds to Kubernetes readiness probes
+// It checks if the application is ready to serve traffic
+func ReadinessRoute(c echo.Context) error {
+	tracer := otel.Tracer("ReadinessRoute")
+	ctx, span := tracer.Start(c.Request().Context(), "readiness_check")
+	defer span.End()
+
+	checks := make(map[string]CheckResult)
+	overallStatus := "OK"
+	httpStatus := http.StatusOK
+
+	// Check Elasticsearch connectivity
+	elasticsearchCheck := checkElasticsearchReadiness(ctx)
+	checks["elasticsearch"] = elasticsearchCheck
+	if elasticsearchCheck.Status != "OK" {
+		overallStatus = "NOT_READY"
+		httpStatus = http.StatusServiceUnavailable
+	}
+
+	// Check cache connectivity
+	cacheCheck := checkCacheReadiness(ctx)
+	checks["cache"] = cacheCheck
+	if cacheCheck.Status != "OK" {
+		overallStatus = "NOT_READY"
+		httpStatus = http.StatusServiceUnavailable
+	}
+
+	// Check provider configuration
+	providerCheck := checkProviderReadiness(ctx)
+	checks["provider"] = providerCheck
+	if providerCheck.Status != "OK" {
+		overallStatus = "NOT_READY"
+		httpStatus = http.StatusServiceUnavailable
+	}
+
+	response := ReadinessResponse{
+		Status:    overallStatus,
+		Checks:    checks,
+		Timestamp: time.Now().UTC().Format(time.RFC3339),
+		Version:   GetAppVersion(),
+	}
+
+	return c.JSON(httpStatus, response)
+}
+
+// LivenessRoute responds to Kubernetes liveness probes
+// It checks if the application is alive and should not be restarted
+func LivenessRoute(c echo.Context) error {
+	tracer := otel.Tracer("LivenessRoute")
+	_, span := tracer.Start(c.Request().Context(), "liveness_check")
+	defer span.End()
+
+	uptime := time.Since(startTime).String()
+
+	response := LivenessResponse{
+		Status:    "OK",
+		Timestamp: time.Now().UTC().Format(time.RFC3339),
+		Uptime:    uptime,
+	}
+
+	return c.JSON(http.StatusOK, response)
+}
+
+// checkElasticsearchReadiness checks if Elasticsearch is accessible
+func checkElasticsearchReadiness(ctx context.Context) CheckResult {
+	if GetElasticsearchDryRun() {
+		return CheckResult{
+			Status:  "OK",
+			Message: "Elasticsearch dry run mode - skipping connectivity check",
+		}
+	}
+
+	hosts := GetElasticsearchHosts()
+	if len(hosts) == 0 {
+		return CheckResult{
+			Status: "ERROR",
+			Error:  "No Elasticsearch hosts configured",
+		}
+	}
+
+	// Try to initialize Elasticsearch client to test connectivity
+	err := initElasticClient(ctx, hosts, GetElasticsearchUsername(), GetElasticsearchPassword())
+	if err != nil {
+		return CheckResult{
+			Status: "ERROR",
+			Error:  err.Error(),
+		}
+	}
+
+	return CheckResult{
+		Status:  "OK",
+		Message: "Elasticsearch connectivity verified",
+	}
+}
+
+// checkCacheReadiness checks if cache is accessible
+// checkCacheReadiness checks if cache is accessible
+func checkCacheReadiness(ctx context.Context) CheckResult {
+	cacheConfig := GetEffectiveCacheConfig()
+	cacheType := cacheConfig["type"].(string)
+
+	if cacheType == "disabled" {
+		return CheckResult{
+			Status:  "OK",
+			Message: "Cache disabled - no connectivity check needed",
+		}
+	}
+
+	// Test cache connectivity by trying to set and get a test value
+	testKey := "elastauth-readiness-check"
+	testValue := "ok"
+
+	// Try to set a test value
+	setCachedItem(ctx, testKey, testValue)
+
+	// Try to get the test value back
+	retrievedValue, exists := getCachedItem(ctx, testKey)
+	if !exists {
+		return CheckResult{
+			Status: "ERROR",
+			Error:  "Cache write/read test failed - value not found",
+		}
+	}
+
+	if retrievedValue != testValue {
+		return CheckResult{
+			Status: "ERROR",
+			Error:  "Cache write/read test failed - value mismatch",
+		}
+	}
+
+	return CheckResult{
+		Status:  "OK",
+		Message: "Cache connectivity verified",
+	}
+}
+
+// checkProviderReadiness checks if the auth provider is properly configured
+func checkProviderReadiness(ctx context.Context) CheckResult {
+	authProvider, err := getAuthProvider()
+	if err != nil {
+		return CheckResult{
+			Status: "ERROR",
+			Error:  err.Error(),
+		}
+	}
+
+	// Validate provider configuration
+	if validator, ok := authProvider.(interface{ Validate() error }); ok {
+		if err := validator.Validate(); err != nil {
+			return CheckResult{
+				Status: "ERROR",
+				Error:  err.Error(),
+			}
+		}
+	}
+
+	return CheckResult{
+		Status:  "OK",
+		Message: "Auth provider configuration verified",
+	}
+}
+
+// GetAppVersion returns the application version
+func GetAppVersion() string {
+	// This could be set via build flags or environment variables
+	version := os.Getenv("APP_VERSION")
+	if version == "" {
+		version = "development"
+	}
+	return version
+}
+
 // ConfigRoute returns the application's configuration for default roles and group-to-role mappings.
 // This endpoint allows clients to discover which roles users will receive based on their groups.
 func ConfigRoute(c echo.Context) error {
@@ -280,9 +557,124 @@ func ConfigRoute(c echo.Context) error {
 	_, span := tracer.Start(c.Request().Context(), "response")
 	defer span.End()
 
+	// Get effective auth provider
+	authProvider := viper.GetString("auth_provider")
+	if authProvider == "" {
+		authProvider = "authelia"
+	}
+
+	// Get effective cache configuration
+	cacheConfig := GetEffectiveCacheConfig()
+	
+	// Mask sensitive cache values
+	maskedCacheConfig := make(map[string]interface{})
+	for key, value := range cacheConfig {
+		if IsSensitiveField(key) {
+			maskedCacheConfig[key] = "***"
+		} else {
+			maskedCacheConfig[key] = value
+		}
+	}
+
+	// Get Elasticsearch configuration with masked credentials
+	elasticsearchConfig := map[string]interface{}{
+		"hosts":    GetElasticsearchHosts(),
+		"username": GetElasticsearchUsername(),
+		"password": "***", // Always mask password
+		"dry_run":  GetElasticsearchDryRun(),
+	}
+
+	// Get provider-specific configuration
+	var providerConfig map[string]interface{}
+	switch authProvider {
+	case "authelia":
+		providerConfig = GetEffectiveAutheliaConfig()
+	case "casdoor":
+		providerConfig = map[string]interface{}{
+			"endpoint":      viper.GetString("casdoor.endpoint"),
+			"client_id":     viper.GetString("casdoor.client_id"),
+			"client_secret": "***", // Always mask secrets
+		}
+	case "oidc":
+		providerConfig = map[string]interface{}{
+			"issuer":        viper.GetString("oidc.issuer"),
+			"client_id":     viper.GetString("oidc.client_id"),
+			"client_secret": "***", // Always mask secrets
+			"claim_mappings": viper.GetStringMapString("oidc.claim_mappings"),
+		}
+	default:
+		providerConfig = make(map[string]interface{})
+	}
+
 	response := configResponse{
-		DefaultRoles:  viper.GetStringSlice("default_roles"),
-		GroupMappings: viper.GetStringMapStringSlice("group_mappings"),
+		AuthProvider:   authProvider,
+		Cache:          maskedCacheConfig,
+		Elasticsearch:  elasticsearchConfig,
+		DefaultRoles:   viper.GetStringSlice("default_roles"),
+		GroupMappings:  viper.GetStringMapStringSlice("group_mappings"),
+		ProviderConfig: providerConfig,
 	}
 	return c.JSON(http.StatusOK, response)
+}
+
+// SwaggerRoute serves the OpenAPI specification
+func SwaggerRoute(c echo.Context) error {
+	// Read the OpenAPI spec file
+	specBytes, err := os.ReadFile("docs/openapi.yaml")
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, NewErrorResponse("Failed to load API specification", http.StatusInternalServerError))
+	}
+
+	// Set appropriate content type for YAML
+	c.Response().Header().Set("Content-Type", "application/x-yaml")
+	return c.Blob(http.StatusOK, "application/x-yaml", specBytes)
+}
+
+// SwaggerUIRoute serves the Swagger UI interface
+func SwaggerUIRoute(c echo.Context) error {
+	html := `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>elastauth API Documentation</title>
+    <link rel="stylesheet" type="text/css" href="https://unpkg.com/swagger-ui-dist@5.10.5/swagger-ui.css" />
+    <style>
+        html {
+            box-sizing: border-box;
+            overflow: -moz-scrollbars-vertical;
+            overflow-y: scroll;
+        }
+        *, *:before, *:after {
+            box-sizing: inherit;
+        }
+        body {
+            margin:0;
+            background: #fafafa;
+        }
+    </style>
+</head>
+<body>
+    <div id="swagger-ui"></div>
+    <script src="https://unpkg.com/swagger-ui-dist@5.10.5/swagger-ui-bundle.js"></script>
+    <script src="https://unpkg.com/swagger-ui-dist@5.10.5/swagger-ui-standalone-preset.js"></script>
+    <script>
+        window.onload = function() {
+            const ui = SwaggerUIBundle({
+                url: '/api/openapi.yaml',
+                dom_id: '#swagger-ui',
+                deepLinking: true,
+                presets: [
+                    SwaggerUIBundle.presets.apis,
+                    SwaggerUIStandalonePreset
+                ],
+                plugins: [
+                    SwaggerUIBundle.plugins.DownloadUrl
+                ],
+                layout: "StandaloneLayout"
+            });
+        };
+    </script>
+</body>
+</html>`
+	return c.HTML(http.StatusOK, html)
 }

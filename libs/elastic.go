@@ -3,12 +3,14 @@ package libs
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"net/http"
 
 	"log/slog"
 
+	"github.com/spf13/viper"
 	"go.opentelemetry.io/otel"
 )
 
@@ -18,6 +20,21 @@ var tracerElastic = otel.Tracer("elastic")
 // before `http.Client` indicates that `client` is a pointer to an instance of the `http.Client`
 // struct. This variable is used to make HTTP requests to an Elasticsearch server.
 var client *http.Client
+
+// newHTTPClient creates a new HTTP client with optional TLS verification skipping.
+// If insecure_skip_verify is enabled, it configures the client to skip certificate verification.
+func newHTTPClient() *http.Client {
+	httpClient := &http.Client{}
+	if viper.GetBool("insecure_skip_verify") {
+		transport := &http.Transport{
+			TLSClientConfig: &tls.Config{
+				InsecureSkipVerify: true,
+			},
+		}
+		httpClient.Transport = transport
+	}
+	return httpClient
+}
 
 // ElasticsearchConnectionDetails holds the connection configuration for an Elasticsearch cluster.
 // It includes the cluster URL, username, and password required for authentication.
@@ -56,7 +73,7 @@ func initElasticClient(ctx context.Context, url, user, pass string) error {
 	_, span := tracerElastic.Start(ctx, "initElasticClient")
 	defer span.End()
 
-	client = &http.Client{}
+	client = newHTTPClient()
 
 	elasticsearchConnectionDetails = ElasticsearchConnectionDetails{
 		URL:      url,
@@ -96,7 +113,7 @@ func UpsertUser(ctx context.Context, username string, elasticsearchUser Elastics
 	_, span := tracerElastic.Start(ctx, "UpsertUser")
 	defer span.End()
 
-	client = &http.Client{}
+	client = newHTTPClient()
 
 	url := fmt.Sprintf("%s/_security/user/%s", elasticsearchConnectionDetails.URL, username)
 

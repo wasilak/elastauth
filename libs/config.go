@@ -29,6 +29,7 @@ func InitConfiguration() error {
 	flag.String("listen", "127.0.0.1:5000", "Listen address")
 	flag.String("config", "./", "Path to config.yml")
 	flag.Bool("enableOtel", false, "Enable OTEL (OpenTelemetry)")
+	flag.Bool("insecure_skip_verify", false, "Skip TLS certificate verification (DANGER: use only for self-signed certificates)")
 
 	pflag.CommandLine.AddGoFlagSet(flag.CommandLine)
 	pflag.Parse()
@@ -55,6 +56,7 @@ func InitConfiguration() error {
 	viper.SetDefault("enable_metrics", false)
 
 	viper.SetDefault("enableOtel", false)
+	viper.SetDefault("insecure_skip_verify", false)
 
 	viper.SetDefault("log_level", "info")
 	viper.SetDefault("log_format", "text")

@@ -26,6 +26,11 @@ func main() {
 	}
 
 	if viper.GetBool("enableOtel") {
+		// Set environment variable for gRPC to skip TLS verification if configured
+		if viper.GetBool("insecure_skip_verify") {
+			os.Setenv("GRPC_GO_REQUIRE_HANDSHAKE", "false")
+		}
+		
 		otelGoTracingConfig := otelgotracer.Config{
 			HostMetricsEnabled:    viper.GetBool("enableOtelHostMetrics"),
 			RuntimeMetricsEnabled: viper.GetBool("enableOtelRuntimeMetrics"),
